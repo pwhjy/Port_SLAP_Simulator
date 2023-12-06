@@ -1,0 +1,8 @@
+.variable-explorer {
+    margin: 5px;
+    background-color: var(--vscode-editor-background);
+}
+
+#variable-explorer-data-grid {
+    margin: 4px;
+}

@@ -1,0 +1,106 @@
+Here we test some of the more mundane functionality provided by maktaba#plugin.
+Before reading through this, make sure you've read plugin.vroom. While you're
+glancing over it, I'll install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+The first thing to note is that maktaba keeps a list of registered plugins.
+Right now, it contains 'maktaba':
+
+  :echomsg string(maktaba#plugin#RegisteredPlugins())
+  ~ ['maktaba']
+
+Let's install a few plugins to get things rolling.
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:repo = maktaba#path#Join([g:thisdir, 'fakeplugins'])
+  :let g:mypath = maktaba#path#Join([g:repo, 'myplugin'])
+  :let g:modularpath = maktaba#path#Join([g:repo, 'modularplugin'])
+  :let g:myplugin = maktaba#plugin#Install(g:mypath)
+  :let g:modularplugin = maktaba#plugin#Install(g:modularpath)
+
+For starters, notice that maktaba#plugin#RegisteredPlugins now contains both
+plugins:
+
+  :echomsg string(sort(maktaba#plugin#RegisteredPlugins()))
+  ~ ['maktaba', 'modularplugin', 'myplugin']
+
+These are the canonical names of the plugins. If a plugin declares an explicit
+name in an addon-info.json file, that name will be used as the canonical name.
+
+  :let g:customnamepath = maktaba#path#Join([g:repo, 'customnameplugin'])
+  :let g:customnameplugin = maktaba#plugin#Install(g:customnamepath)
+  :echomsg g:customnameplugin.name
+  ~ name-from-addon-info-plugin.vim
+
+Otherwise, the canonical name will be the name of the directory, with one small
+twist: any "vim-" prefix or ".vim" suffix will be stripped. This is to
+accommodate plugins cloned from github, etc., where it's convention to add a
+vim prefix or suffix to the repository name.
+
+  :call maktaba#plugin#Install(maktaba#path#Join([g:repo, 'dash-it-off.vim']))
+  :call maktaba#plugin#Install(maktaba#path#Join([g:repo, 'vim-unimpaired']))
+  :echomsg string(sort(maktaba#plugin#RegisteredPlugins()))
+  ~ ['dash-it-off', 'maktaba', 'modularplugin', 'myplugin',
+  | 'name-from-addon-info-plugin.vim', 'unimpaired']
+
+You can check what transformations maktaba will perform on a plugin name with
+maktaba#plugin#CanonicalName.
+
+  :echomsg maktaba#plugin#CanonicalName('dash-it-off.vim')
+  ~ dash-it-off
+  :echomsg maktaba#plugin#CanonicalName('vim-unimpaired')
+  ~ unimpaired
+
+
+You cannot create plugins more than once. If you try to do so, you'll get an
+AlreadyExists error:
+
+  :let g:install = maktaba#function#Create('maktaba#plugin#Install')
+  :call maktaba#error#Try(g:install.WithArgs(g:mypath))
+  ~ ERROR(AlreadyExists): Plugin "myplugin" already exists.
+
+You can use maktaba#plugin#GetOrInstall to get around this, so long as the old
+path and the new path are the same:
+
+  :let g:myplugin2 = maktaba#plugin#GetOrInstall(g:mypath)
+  :call maktaba#ensure#IsEqual(g:myplugin2, g:myplugin)
+
+Be warned, maktaba cannot handle multiple plugins with the same name, even if
+they have different paths:
+
+  :let g:getorinstall = maktaba#function#Create('maktaba#plugin#GetOrInstall')
+  :let g:anotherpath = maktaba#path#Join(['another', 'path', 'to', 'myplugin'])
+  :call maktaba#error#Try(g:getorinstall.WithArgs(g:anotherpath))
+  ~ ERROR(AlreadyExists): Conflict for plugin "myplugin": * (glob)
+  :let g:other_nfaip_path =
+  | maktaba#path#Join(['another', 'name-from-addon-info-plugin.vim.vim'])
+  :call maktaba#error#Try(g:getorinstall.WithArgs(g:other_nfaip_path))
+  ~ ERROR(AlreadyExists): Conflict for plugin (glob)
+  | "name-from-addon-info-plugin.vim": *
+
+There are a few more utility functions available. To demonstrate, I'll load up
+one more plugin:
+
+  :let g:ftpath = maktaba#path#Join([g:repo, 'ftplugin'])
+  :let g:ftplugin = maktaba#plugin#Install(g:ftpath)
+
+Each plugin has a HasDir function which lets you know if a plugin has a specific
+directory, either as a direct subdirectory or in an after/ directory. You might
+want to verify the following statements in the plugins in the fakeplugin
+directory.
+
+myplugin does not have an ftplugin dir:
+
+  :call maktaba#ensure#IsFalse(g:myplugin.HasDir('ftplugin'))
+
+But the ftplugin does, of course:
+
+  :call maktaba#ensure#IsTrue(g:ftplugin.HasDir('ftplugin'))
+
+myplugin has a plugin dir in the after directory:
+
+  :call maktaba#ensure#IsTrue(g:myplugin.HasDir('plugin'))

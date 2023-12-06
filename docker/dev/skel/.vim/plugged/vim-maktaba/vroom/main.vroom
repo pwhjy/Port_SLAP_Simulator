@@ -1,0 +1,59 @@
+Welcome! This is Maktaba, a library for writing consistent vim plugins.
+
+Maktaba provides an API for plugin developers. There are no user-visible
+commands here, though there are many powerful plugins that can be built on the
+maktaba framework (such as configuration managers and dependency managers). For
+a good example, see the Glaive plugin.
+
+For plugin authors, maktaba provides two things:
+
+1. Conventions and tools for writing consistent plugins. These conventions allow
+your plugins to use a dependency manager and the maktaba configuration tools.
+See plugin.vroom for details.
+
+2. A number of utility functions that help you avoid the pitfalls of vimscript.
+Vimscript is a finicky language with many gotchas. Some functionality depends
+upon the end user's settings. Maktaba helps you avoid these pitfalls and write
+portable plugins. See other vroom files in this directory for details.
+
+Plugin authors may be particularly excited about logging functionality. See
+log.vroom for details.
+
+To get started using maktaba, you'll need to source the maktaba bootstrap file
+in your vimrc. Before you do that, though, you should turn off vi-compatibility:
+maktaba does not support vi-compatible mode.
+
+  :set nocompatible
+
+With compatibility disabled you are ready to install maktaba. You do this by
+sourcing a bootstrap file, which lives at maktaba/bootstrap.vim.
+
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+
+We just source that file, and then we're good to go.
+
+  :execute 'source' g:bootstrapfile
+
+(In your vimrc, this will look more like :source /path/to/maktaba/bootstrap.vim)
+
+You can also install maktaba manually, see manual.vroom for details.
+
+vroom files are literate vim tests, so you'll see initialization code at the top
+of each.
+
+Maktaba uses semantic versioning (see http://semver.org). The version is
+available via maktaba#VERSION:
+
+  :echomsg maktaba#VERSION
+  ~ \d+.\d+.\d+ (regex)
+
+You can use the maktaba#IsAtLeastVersion function to verify that the maktaba
+version is at or past a certain point.
+
+  :call maktaba#ensure#IsTrue(maktaba#IsAtLeastVersion('0.0.1'))
+  :call maktaba#ensure#IsFalse(maktaba#IsAtLeastVersion('100.0.0'))
+  :call maktaba#ensure#IsTrue(maktaba#IsAtLeastVersion(maktaba#VERSION))
+
+This is useful if you want to check whether the user has certain maktaba
+features available.

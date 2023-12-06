@@ -1,0 +1,235 @@
+Maktaba promotes an opinionated plugin pattern. Before we dive in, let's discuss
+the philosophy.
+
+Vanilla Vim plugins are directories on the vim runtimepath. When you put
+a plugin on the runtimepath, it is "installed". You can use the autoloadable
+functions that the plugin has defined. However, the plugin is not "loaded" until
+after vimrc time, at which point vim sources all the plugin files.
+
+This model has a number of flaws. It makes dependency management difficult. It
+makes installation after vimrc time difficult. It makes configuration difficult,
+and forces plugin authors to resort to global settings (which, by default, don't
+become defined until after vimrc time).
+
+Furthermore, your plugin files are prone to being sourced more than once if
+something strange happens. The vim plugin guide suggests putting checks at your
+plugin to prevent the from being re-entered.
+
+All in all, the vim plugin model is somewhat insane.
+
+Maktaba cannot fix all these problems: they are built into vim. However, maktaba
+provides conventions that make them easier to manage.
+
+Your average plugin directory structure looks something like this:
+
+|  coolthing/
+|    instant/
+|    plugin/
+|    autoload/
+|    ftdetect/
+|    ftplugin/
+|    syntax/
+|    indent/
+
+Not all directories need be included, but these are the interesting ones.
+
+Vim automatically makes functions defined in autoload/ available when the plugin
+is installed, and vim enforces naming conventions therein.
+
+Vim handles ftdetect, ftplugin, syntax, and indent files in a moderately sane
+manner (and maktaba provides some helper functions to fill in the gaps -- see
+ftplugin.vroom). Roughly speaking:
+- ftdetect/ files are used to define new filetypes
+- ftplugin/ files are used to configure new filetypes
+- syntax/ files are used to highlight new filetypes
+- indent/ files are used to define indent rules for new filetypes
+
+The interesting stuff usually happens in the instant/ and plugin/ directories.
+- plugin/ files are sourced by vim after the vimrc file finishes
+- instant/ files are sourced by maktaba IMMEDIATELY upon installation.
+In a standard maktaba plugin, they will look something like this:
+
+|  instant/
+|    flags.vim
+|  plugin/
+|    settings.vim
+|    commands.vim
+|    autocmds.vim
+|    mappings.vim
+
+These are the five core maktaba files. You may have others as necessary (and you
+should only include relevant files, of course), but these are the common ones.
+
+The flags.vim file is perhaps the most important file, we'll come to that in
+a moment. As for the other files, their usage is self explanatory:
+- vim settings (make, grep, gdefault, etc.) should be set in settings.vim
+- commands should be defined in commands.vim
+- autocmds should be set up in autocmds.vim
+- key mappings should be made in mappings.vim
+
+This separation of concerns gives users more control over what part of your
+plugin they use. For example, perhaps they want your commands but dislike your
+autocmds, or perhaps they appreciate your settings but despise your key
+mappings. (Vim users can be very opinionated about key mappings.) Maktaba makes
+it easy for users to pick and choose what they take from your plugin.
+
+Note that these file names are not special: if your plugin does things that fall
+outside of these bins, you're encouraged to create as many (or as few) plugin
+files as you want. The only thing you need to know is that all plugin files are
+sourced automatically EXCEPT files named mappings.vim. Maktaba policy is that
+users must opt-in to key mappings. (If you use custom mapping files, you should
+disable them by default as explained below).
+
+You'll notice that some of these files go in the instant/ directory and others
+go in the plugin/ directory. As a rule of thumb, only place files in instant/
+if you ABSOLUTELY MUST. instant/ files are loaded IMMEDIATELY when the plugin is
+installed. This is usually unnecessary. Every file in plugin/ will be sourced by
+vim in the usual load order. You need only use instant/ files when you need work
+to be done BEFORE the .vimrc file exists.
+
+For a vast majority of plugins, the only thing you need to do at install time is
+define your plugin flags. These are what users use to configure your plugin
+BEFORE it is loaded.
+
+Note the order of events:
+1. You install a plugin in your vimrc
+2. Its flags become defined
+3. You configure its flags in your vimrc
+4. Vim loads the plugin/ files
+
+The time to configure a plugin is BETWEEN installation and loading.
+
+Notice: ANYTHING THAT YOU PUT IN THE instant/ DIRECTORY CANNOT BE CONFIGURED.
+
+There are some important uses for instantly loaded files, but you should use
+this feature with caution.
+
+Almost every plugin will want an instant/flags.vim file: it's the place where
+you define flags used to configure your plugin. This allows you to avoid subtle
+issues when users attempt to update complicated configurations that do not
+become defined until load time. If you make use of the maktaba flags framework,
+you can do away with global settings entirely and allow your users to configure
+your plugin using Glaive (a google plugin for maktaba flag configuration) or
+other plugins that use the maktaba#setting API.
+
+Enough talk: let's see some examples. As always, we begin by installing maktaba.
+If you haven't seen this code yet, read through main.vroom briefly.
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Now maktaba is installed, and we can install our plugin. We've got a fake plugin
+prepped in the fakeplugin directory:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:pluginpath = maktaba#path#Join([g:thisdir, 'fakeplugins', 'myplugin'])
+
+We install plugins by creating what's called a "plugin object". This will put
+our plugin onto the runtimepath, source all the files in instant/, and then
+return a plugin object that we can use to take further actions.
+
+First, let's verify that our plugin is not currently on the runtimepath:
+
+  :call maktaba#ensure#IsFalse(has_key(maktaba#rtp#LeafDirs(), 'myplugin'))
+
+And, of course, the plugin is not yet registered.
+
+  :call maktaba#ensure#IsFalse(maktaba#plugin#IsRegistered('myplugin'))
+
+Now, we install the plugin by giving maktaba the full plugin path:
+
+  @messages (STRICT)
+  :let g:plugin = maktaba#plugin#Install(g:pluginpath)
+  ~ Flags file sourced.
+  @messages
+
+This should generally be done by a plugin manager.
+
+A few things have happened. First of all, notice that the flags file was sourced
+immediately. (Take a look at fakeplugins/myplugin/plugin/flags.vim to see where
+the message came from.) Secondly and most importantly, our plugin is now on the
+runtimepath and registered with maktaba:
+
+  :call maktaba#ensure#IsTrue(has_key(maktaba#rtp#LeafDirs(), 'myplugin'))
+  :call maktaba#ensure#IsTrue(maktaba#plugin#IsRegistered('myplugin'))
+
+If we ever lose our handle on the plugin object, we can always use
+maktaba#plugin#Get to get another:
+
+  :call maktaba#ensure#IsEqual(maktaba#plugin#Get('myplugin'), g:plugin)
+
+This all works as you might expect, but none of it is very interesting. Let's
+see what the plugin object can do. It possesses some boring data, such as name
+and location:
+
+  :echomsg g:plugin.name
+  ~ myplugin
+  :echomsg maktaba#path#StripTrailingSlash(
+  |maktaba#path#Split(g:plugin.location)[-1])
+  ~ myplugin
+
+These, too, are somewhat boring (except for the fact that you should NEVER EVER
+change them). The most interesting thing that the plugin can do is load itself.
+Normally, you don't need to load plugins: vim will do that automatically during
+startup. However, if your plugin was installed after startup then it won't be
+loaded automatically. You can load it with the Load function:
+
+  :call g:plugin.Load()
+  ~ I shall have things my way!
+
+This will source all of the relevant plugin files.
+
+Maktaba is able to detect any plugin present on the runtimepath, even if it
+wasn't explicitly registered with maktaba.
+
+  :let g:fakeplugins = maktaba#path#Join([g:thisdir, 'fakeplugins'])
+  :let g:emptyplugin_path = maktaba#path#Join([g:fakeplugins, 'emptyplugin'])
+  :let &runtimepath .= ',' . g:emptyplugin_path
+  :call maktaba#ensure#IsTrue(maktaba#plugin#IsRegistered('emptyplugin'))
+  :let g:emptyplugin = maktaba#plugin#Get('emptyplugin')
+  :let g:emptyplugin_fullpath = maktaba#path#Join([g:emptyplugin_path, ''])
+  :call maktaba#ensure#IsEqual(g:emptyplugin.location, g:emptyplugin_fullpath)
+
+Most plugins will be registered eventually since registration is automatically
+triggered by several different conditions: plugin files being entered, being
+required by another plugin, having flags looked up and configured, etc. However,
+instant/ hooks won't activate until the plugin is registered with maktaba, and
+these automatic registration conditions don't usually come very early in vim
+startup, so if you want instant/ hooks to work properly, you'll probably need to
+manually trigger vim to detect and register all plugins once they've been added
+to the runtimepath by your plugin manager.
+
+  :call maktaba#rtp#Add(maktaba#path#Join([g:fakeplugins, 'fullplugin']))
+  :call maktaba#rtp#Add(maktaba#path#Join([g:fakeplugins, 'loudplugin']))
+
+Call maktaba#plugin#Detect to detect and register plugins.
+
+  :call maktaba#plugin#Detect()
+  ~ INSTANT LOADED
+  :echomsg string(maktaba#plugin#RegisteredPlugins())
+  ~ ['emptyplugin', 'fullplugin', 'loudplugin', 'maktaba', 'myplugin']
+
+Calling maktaba#plugin#RegisteredPlugins will also detect new plugins
+automatically.
+
+  :call maktaba#rtp#Add(maktaba#path#Join([g:fakeplugins, 'library']))
+  :call maktaba#rtp#Add(maktaba#path#Join([g:fakeplugins, 'library2']))
+
+  :echomsg string(maktaba#plugin#RegisteredPlugins())
+  ~ ['emptyplugin', 'fullplugin', 'library', 'library2', 'loudplugin',
+  | 'maktaba', 'myplugin']
+
+That's Maktaba plugin basics for you. There's still a lot more ground to cover.
+Here's a directory of relevant topics:
+
+* pluginfiles.vroom.........................................MAKTABA PLUGIN FILES
+* pluginflags.vroom.......................CONFIGURING MAKTABA PLUGINS WITH FLAGS
+* plugincontrol.vroom............................CONTROLLING PLUGIN FILE LOADING
+* pluginextensions.vroom......DEFINING EXTENSION POINTS FOR OTHER PLUGINS TO USE
+* pluginutil.vroom...................................ADDITIONAL PLUGIN UTILITIES
+* ftplugin.vroom................................................FILETYPE PLUGINS
+* helptags.vroom..............................................HELPTAG GENERATION
+* pluginsignals.vroom.........................................PLUGIN CONVENTIONS
+* libraries.vroom...................................PLUGIN DEPENDENCY MANAGEMENT

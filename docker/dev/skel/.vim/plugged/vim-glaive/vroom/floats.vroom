@@ -1,0 +1,105 @@
+This test file puts glaive floats through their paces. See glaive.vroom for an
+introduction to glaive syntax.
+
+Install glaive:
+
+  :set nocompatible
+  :let g:glaivedir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:glaivedir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Install a plugin:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+Define a float flag:
+
+  :call g:plugin.Flag('float', 0.0)
+  :call maktaba#ensure#IsFloat(g:plugin.Flag('float'))
+
+Utility function:
+
+  :function! Is(value) abort
+  :  call maktaba#ensure#IsEqual(g:plugin.Flag('float'), a:value)
+  :endfunction
+
+Assignment works as you might expect:
+
+  :Glaive fullplugin float=1.0
+  :call Is(1.0)
+
+Negative numbers work:
+
+  :Glaive fullplugin float=-628.31
+  :call Is(-628.31)
+
+The evaluation syntax (flag values in backticks are evaluated) works, but is
+not required:
+
+  :Glaive fullplugin float=`2 * 3.14`
+  :call Is(6.28)
+
+If you set a flag without giving it a value it will be set to the NUMBER one.
+Setting a flag without an operator will ALWAYS set it to the integral one,
+regardless of the original type of the flag.
+
+  :Glaive fullplugin float
+  :call Is(1)
+
+
+Similarly, banging a float flag will set it to the NUMBER zero, not the float
+zero. Banging a flag ALWAYS sets it to integral zero, regardless of the original
+type of the flag.
+
+  :Glaive fullplugin float=1.0
+  :Glaive fullplugin !float
+  :call Is(0)
+
+Let's make the flag a float again:
+
+  :Glaive fullplugin float=10.3
+
+If you want to "clear" a float flag, set it to an empty value (by using the
+= operator without a value).
+
+  :Glaive fullplugin float=
+  :call Is(0.0)
+
+You can add to and subtract from float flags.
+
+  :Glaive fullplugin float+=2
+  :call Is(2.0)
+
+  :Glaive fullplugin float+=4.28
+  :call Is(6.28)
+
+This syntax is pathological, but works:
+
+  :Glaive fullplugin float-=-6.28
+  :call Is(12.56)
+
+Callbacks work as expected:
+
+  :function! AddNearlyTau(val) abort
+  :  return a:val + 6.28
+  :endfunction
+  :Glaive fullplugin float=
+  :Glaive fullplugin float`=AddNearlyTau
+  :call Is(6.28)
+
+Other syntax is invalid:
+
+  :call maktaba#error#TryCommand('Glaive fullplugin ~float')
+  ~ ERROR(WrongType): Could not set ~float in fullplugin.
+  | Expected a number. Got a float.
+  :call maktaba#error#TryCommand('Glaive fullplugin float+=foo')
+  ~ ERROR(WrongType): Could not set float+=foo in fullplugin.
+  | Expected a number or float. Got a string.
+  :call maktaba#error#TryCommand('Glaive fullplugin float^=3')
+  ~ ERROR(WrongType): Could not set float^=3 in fullplugin.
+  | Expected a string or list. Got a float.
+  :call maktaba#error#TryCommand('Glaive fullplugin float$=4')
+  ~ ERROR(WrongType): Could not set float$=4 in fullplugin.
+  | Expected a string or list. Got a float.

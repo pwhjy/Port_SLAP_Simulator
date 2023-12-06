@@ -1,0 +1,125 @@
+Plugins registered with maktaba have access to a number of features. Most
+important among those is plugin configuration management, which is done via
+flags. For other features, see plugin.vroom. In the meantime, I'll install
+maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Good. Now let's grab a plugin object:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+There are two functions that you'll use to manipulate flags. The first, and the
+most self explanatory, is the HasFlag function.
+
+  :call maktaba#ensure#IsFalse(g:plugin.HasFlag('undefined'))
+
+You'll remember from pluginfiles.vroom that plugins with instant/ and plugin/
+directories automatically get 'plugin' and 'instant' flags. Let's verify that
+now:
+
+  :call maktaba#ensure#IsTrue(g:plugin.HasFlag('plugin'))
+  :call maktaba#ensure#IsTrue(g:plugin.HasFlag('instant'))
+
+This is all well and good, but what you really want to do is get and set flags.
+You do this using the Flag function.
+
+  :call g:plugin.Flag('newflag', 'Hello, world!')
+
+This function takes one or two parameters. If you give it one parameter, it will
+return the value of the flag:
+
+  :echomsg g:plugin.Flag('newflag')
+  ~ Hello, world!
+
+If you give it two parameters, it sets the flag (defining it if necessary), as
+seen above.
+
+Note that you should only define new flags in an instant/flags.vim file.
+
+
+
+Flags can be set using the maktaba setting syntax. This syntax is fairly
+intuitive:
+
+  :call g:plugin.Flag('mydict', {'key': 'nothing'})
+  :call g:plugin.Flag('mydict[key]', 'something')
+  :echomsg g:plugin.Flag('mydict[key]')
+  ~ something
+  :echomsg string(g:plugin.Flag('mydict'))
+  ~ {'key': 'something'}
+
+See setting.vroom for details. Let's put that syntax through its paces:
+
+  :call g:plugin.Flag('dictflag', {})
+  :call g:plugin.Flag('dictflag[topkey]', {})
+  :call g:plugin.Flag('dictflag[topkey][list]', ['a', 'b', 'c'])
+  :echomsg g:plugin.Flag('dictflag[topkey][list][0]')
+  ~ a
+
+It works just about how you'd expect. This functionality is powered by
+maktaba#value#Focus, see value.vroom for more details.
+
+
+
+Flag values are locked. You cannot change them.
+
+  :call g:plugin.Flag('mylist', [])
+  :let g:append = maktaba#function#Create('add')
+  :call maktaba#error#Try(g:append.WithArgs(g:plugin.Flag('mylist'), 'thing'))
+  ~ *E741: Value is locked* (glob)
+
+If you want to change a flag value, you must grab a copy, change the copy, and
+then commit the changes back with another call to Flag.
+
+  :let g:oldval = g:plugin.Flag('mylist')
+  :let g:newval = add(copy(g:oldval), 'thing')
+  :call g:plugin.Flag('mylist', g:newval)
+  :echomsg string(g:plugin.Flag('mylist'))
+  ~ ['thing']
+
+
+
+The Flag function is usually sufficient for defining and manipulating flags.
+Sometimes, however, you need a little more power. In those cases, you can access
+the flag objects directly: they live in the 'flags' dictionary on the plugin
+object.
+
+  :call maktaba#ensure#IsTrue(has_key(g:plugin, 'flags'))
+
+The objects in this dictionary are flag OBJECTS, not flag values. You can use
+them to get and set the flag.
+
+  :call g:plugin.flags.mylist.Set(['newlist'])
+  :echomsg string(g:plugin.flags.mylist.Get())
+  ~ ['newlist']
+
+This allows you to use some advanced flag functionality, such as flag
+translators:
+
+  :call g:plugin.Flag('invertme', 0)
+  :call g:plugin.flags['invertme'].AddTranslator('empty')
+
+  :call g:plugin.Flag('invertme', 1)
+  :echomsg g:plugin.Flag('invertme')
+  ~ 0
+
+To learn about the full power of flag objects, see flags.vroom.
+
+
+
+In general, you won't have to touch the flag objects. You, a library developer,
+need only interact with flags via the Flag function. Let's recap how flags are
+used on all the various levels:
+
+1. All flags should be created and set to their default values in your plugin's
+|  instant/flags.vim file.
+2. Plugin code should access flags via the Flag function. In general, plugins
+|  should not set their own flags: they should set defaults and leave them be.
+3. Users change the values of flags, generally by interacting with commands
+|  in plugins like Glaive, which put a user frontend on the maktaba flags API.

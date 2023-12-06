@@ -1,0 +1,33 @@
+Most users install plugins with a plugin manager such as pathogen, Vundle, or
+NeoBundle. Glaive supports these use cases.
+
+To see how, we start by installing Glaive. In order for these tests to work,
+maktaba MUST be in the same directory as Glaive. Given that's the case, let's
+get Glaive installed:
+
+  :set nocompatible
+  :let g:glaivedir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:glaivedir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Now, assume that some plugin manager has added the 'fullplugin' plugin to the
+runtimepath somehow.
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :call maktaba#rtp#Add(g:path)
+
+This plugin has NOT been installed by maktaba: it's on the runtimepath, but its
+flag file has not been loaded. By default, it will be forced to install by vim,
+which will source the appropriate files after the vimrc is done.
+
+But we need that flags file to be run before we can configure the plugin flags!
+Fortunately, Glaive takes care of that for us:
+
+  :Glaive fullplugin float=6.28318 string='tau'
+
+Maktaba has told maktaba to find and define the approprite flags, and the flags
+have been set, all without any fuss.
+
+  :let g:plugin = maktaba#plugin#Get('fullplugin')
+  :call maktaba#ensure#IsEqual(g:plugin.Flag('string'), 'tau')

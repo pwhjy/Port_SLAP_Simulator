@@ -1,0 +1,43 @@
+This is a vroom file. It's executable documentation. Or you can think of it as
+very well-documented tests. See helloworld.vroom for a more thorough
+explanation.
+
+The helloworld plugin supports farewells in addition to greetings. Before
+getting into the details of how the plugin works, I'll install it using the
+standard bootstrap.vim file.
+
+  :set nocompatible
+  :let g:helloworlddir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:helloworlddir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+  :call maktaba#LateLoad()
+
+The goodbye feature is a little different. Instead of accepting a name to greet,
+it bids farewell to the last person greeted with :Hello. It doesn't work if
+there hasn't been any greeting yet.
+
+  :Goodbye
+  ~ It's very rude to say goodbye before you've said hello.
+
+Let's have a quick conversation.
+
+  :Hello
+  ~ Hello, world!
+  :Goodbye
+  ~ Goodbye, world!
+
+Life is short...
+
+Once you've said hello, it's not a problem to keep saying goodbye.
+
+  :Goodbye
+  ~ Goodbye, world!
+
+If you greet someone new, all subsequent goodbyes will be addressed to them.
+
+  :Hello Dolly
+  ~ Hello, Dolly!
+
+  :Goodbye
+  ~ Goodbye, Dolly!

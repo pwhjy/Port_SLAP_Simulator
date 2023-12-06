@@ -1,0 +1,260 @@
+{
+	"name": "doxdocgen",
+	"displayName": "Doxygen Documentation Generator",
+	"description": "Let me generate Doxygen documentation from your source code for you.",
+	"version": "0.4.2",
+	"publisher": "cschlosser",
+	"engines": {
+		"vscode": "^1.16.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"badges": [
+		{
+			"url": "https://travis-ci.org/christophschlosser/doxdocgen.svg?branch=master",
+			"href": "https://travis-ci.org/christophschlosser/doxdocgen",
+			"description": "Continuous Integration (Travis)"
+		},
+		{
+			"url": "https://ci.appveyor.com/api/projects/status/4h84071p9tv0y9r6?svg=true",
+			"href": "https://ci.appveyor.com/project/christophschlosser/doxdocgen",
+			"description": "Continuous Integration (AppVeyor)"
+		},
+		{
+			"url": "https://codecov.io/gh/christophschlosser/doxdocgen/branch/master/graph/badge.svg",
+			"href": "https://codecov.io/gh/christophschlosser/doxdocgen",
+			"description": "Code coverage"
+		}
+	],
+	"activationEvents": [
+		"onLanguage:cpp",
+		"onLanguage:c"
+	],
+	"contributes": {
+		"configuration": {
+			"type": "object",
+			"title": "Doxygen Documentation Generator Settings",
+			"properties": {
+				"doxdocgen.c.triggerSequence": {
+					"description": "Doxygen comment trigger. This character sequence triggers generation of Doxygen comments.",
+					"type": "string",
+					"default": "/**"
+				},
+				"doxdocgen.c.firstLine": {
+					"description": "The first line of the comment that gets generated. If empty it won't get generated at all.",
+					"type": "string",
+					"default": "/**"
+				},
+				"doxdocgen.c.commentPrefix": {
+					"description": "The prefix that is used for each comment line except for first and last.",
+					"type": "string",
+					"default": " * "
+				},
+				"doxdocgen.c.lastLine": {
+					"description": "The last line of the comment that gets generated. If empty it won't get generated at all.",
+					"type": "string",
+					"default": " */"
+				},
+				"doxdocgen.c.setterText": {
+					"description": "Smart text snippet for setters.",
+					"type": "string",
+					"default": "Set the {name} object"
+				},
+				"doxdocgen.c.getterText": {
+					"description": "Smart text snippet for getters.",
+					"type": "string",
+					"default": "Get the {name} object"
+				},
+				"doxdocgen.c.factoryMethodText": {
+					"description": "Smart text snippet for factory methods/functions.",
+					"type": "string",
+					"default": "Create a {name} object"
+				},
+				"doxdocgen.cpp.tparamTemplate": {
+					"description": "The template of the template parameter Doxygen line(s) that are generated. If empty it won't get generated at all.",
+					"type": "string",
+					"default": "@tparam {param} "
+				},
+				"doxdocgen.cpp.ctorText": {
+					"description": "Smart text snippet for constructors.",
+					"type": "string",
+					"default": "Construct a new {name} object"
+				},
+				"doxdocgen.cpp.dtorText": {
+					"description": "Smart text snippet for destructors.",
+					"type": "string",
+					"default": "Destroy the {name} object"
+				},
+				"doxdocgen.file.fileTemplate": {
+					"description": "The template for the file parameter in Doxygen.",
+					"type": "string",
+					"default": "@file {name}"
+				},
+				"doxdocgen.file.copyrightTag": {
+					"description": "File copyright documentation tag.  Array of strings will be converted to one line per element.  Can template {year}.",
+					"type": [
+						"array",
+						"string"
+					],
+					"default": [
+						"@copyright Copyright (c) {year}"
+					]
+				},
+				"doxdocgen.file.versionTag": {
+					"description": "Version number for the file.",
+					"type": "string",
+					"default": "@version 0.1"
+				},
+				"doxdocgen.file.customTag": {
+					"description": "Additional file documentation.  Array of strings will be converted to one line per element.  Can template {year}, {date}, {author}, and {email}.",
+					"type": [
+						"array",
+						"string"
+					],
+					"default": []
+				},
+				"doxdocgen.file.fileOrder": {
+					"description": "The order to use for the file comment. Values can be used multiple times. Valid values are shown in default setting.",
+					"type": [
+						"array",
+						"string"
+					],
+					"default": [
+						"file",
+						"author",
+						"brief",
+						"version",
+						"date",
+						"empty",
+						"copyright",
+						"empty",
+						"custom"
+					]
+				},
+				"doxdocgen.generic.includeTypeAtReturn": {
+					"description": "Whether include type information at return.",
+					"type": "boolean",
+					"default": true
+				},
+				"doxdocgen.generic.boolReturnsTrueFalse": {
+					"description": "If this is enabled a bool return value will be split into true and false return param.",
+					"type": "boolean",
+					"default": true
+				},
+				"doxdocgen.generic.briefTemplate": {
+					"description": "The template of the brief Doxygen line that is generated. If empty it won't get generated at all.",
+					"type": "string",
+					"default": "@brief {text}"
+				},
+				"doxdocgen.generic.paramTemplate": {
+					"description": "The template of the param Doxygen line(s) that are generated. If empty it won't get generated at all.",
+					"type": "string",
+					"default": "@param {param} "
+				},
+				"doxdocgen.generic.returnTemplate": {
+					"description": "The template of the return Doxygen line that is generated. If empty it won't get generated at all.",
+					"type": "string",
+					"default": "@return {type} "
+				},
+				"doxdocgen.generic.linesToGet": {
+					"description": "How many lines the plugin should look for to find the end of the declaration. Please be aware that setting this value too low could improve the speed of comment generation by a very slim margin but the plugin also may not correctly detect all declarations or definitions anymore.",
+					"type": "number",
+					"default": 20
+				},
+				"doxdocgen.generic.authorName": {
+					"description": "Set the name of the author.  Replaces {author}.",
+					"type": "string",
+					"default": "your name"
+				},
+				"doxdocgen.generic.authorEmail": {
+					"description": "Set the e-mail address of the author.  Replaces {email}.",
+					"type": "string",
+					"default": "you@domain.com"
+				},
+				"doxdocgen.generic.authorTag": {
+					"description": "Set the style of the author tag and your name.  Can template {author} and {email}.",
+					"type": "string",
+					"default": "@author {author} ({email})"
+				},
+				"doxdocgen.generic.dateTemplate": {
+					"description": "The template for the date parameter in Doxygen.",
+					"type": "string",
+					"default": "@date {date}"
+				},
+				"doxdocgen.generic.dateFormat": {
+					"description": "The format to use for the date.",
+					"type": "string",
+					"default": "YYYY-MM-DD"
+				},
+				"doxdocgen.generic.generateSmartText": {
+					"description": "Decide if you want to get smart text for certain commands.",
+					"type": "boolean",
+					"default": true
+				},
+				"doxdocgen.generic.splitCasingSmartText": {
+					"description": "Decide if the values put into {name} should be split according to their casing.",
+					"type": "boolean",
+					"default": true
+				},
+				"doxdocgen.generic.order": {
+					"description": "The order to use for the comment generation. Values can be used multiple times. Valid values are shown in default setting.",
+					"type": [
+						"array",
+						"string"
+					],
+					"default": [
+						"brief",
+						"empty",
+						"tparam",
+						"param",
+						"return"
+					]
+				}
+			}
+		}
+	},
+	"icon": "images/icon.png",
+	"keywords": [
+		"cpp",
+		"c++",
+		"c",
+		"Doxygen"
+	],
+	"license": "SEE LICENSE IN LICENSE",
+	"main": "./out/extension",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/christophschlosser/doxdocgen.git"
+	},
+	"bugs": {
+		"url": "https://github.com/christophschlosser/doxdocgen/labels/bug"
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"postinstall": "node ./node_modules/vscode/bin/install",
+		"test": "npm run compile && node ./node_modules/vscode/bin/test"
+	},
+	"dependencies": {
+		"moment": "^2.20.1",
+		"opn": "^5.2.0"
+	},
+	"devDependencies": {
+		"@types/mocha": "^2.2.48",
+		"@types/node": "^7.0.43",
+		"decache": "^4.4.0",
+		"istanbul": "^0.4.5",
+		"mocha": "^5.0.1",
+		"remap-istanbul": "^0.10.1",
+		"tslint": "^5.9.1",
+		"typescript": "^2.7.2",
+		"vscode": "^1.1.10"
+	},
+	"__metadata": {
+		"id": "cschlosser.doxdocgen",
+		"publisherDisplayName": "cschlosser",
+		"publisherId": "cschlosser"
+	}
+}

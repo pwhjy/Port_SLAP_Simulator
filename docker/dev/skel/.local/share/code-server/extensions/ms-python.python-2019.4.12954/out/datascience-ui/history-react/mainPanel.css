@@ -1,0 +1,24 @@
+body, html {
+    height: 100%;
+    overflow: hidden;
+}
+
+#root {
+    height: 100%;
+    overflow: hidden;
+}
+
+#main-panel {
+    background: var(--override-background, var(--vscode-editor-background));
+    color: var(--override-foreground, var(--vscode-editor-foreground));
+    height: 100%;
+    overflow: hidden;
+}
+
+.hide {
+    display: none;
+}
+
+.invisible {
+    visibility: hidden;
+}

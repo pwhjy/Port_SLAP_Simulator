@@ -1,0 +1,75 @@
+In addition to the functionality featured in system.vroom, the maktaba#syscall#
+helpers feature asynchronous execution powered by vim's native jobs feature.
+
+Before we dive in, let's get maktaba installed and set up the shell override:
+
+  @system (STRICT)
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+  :call maktaba#system#SetUsableShellRegex('\v<shell\.vroomfaker$')
+
+The examples featured in this file only work with vim instances that support
+vim jobs.
+
+  :if !has('job')<CR>
+  |  echomsg maktaba#error#MissingFeature(
+  |      'Must have +job support to run system-vimjob.vroom examples')<CR>
+  |endif
+
+
+To execute system calls asynchronously, use CallAsync.
+
+  :function AsyncWait(invocation, delay) abort<CR>
+  |  let l:deadline = localtime() + a:delay " wait for at most N seconds<CR>
+  |  while !a:invocation.finished && localtime() < l:deadline<CR>
+  |    sleep 100m<CR>
+  |  endwhile<CR>
+  |  call maktaba#ensure#IsTrue(a:invocation.finished,
+  | 'Async callback was expected to complete within %d seconds', a:delay)<CR>
+  |  return a:invocation<CR>
+  |endfunction
+  :let g:syscall = maktaba#syscall#Create(['echo', 'hi'])
+  :function Callback(result) abort<CR>
+  |  let g:callback_stdout = a:result.stdout<CR>
+  |endfunction
+  :let g:invocation = AsyncWait(g:syscall.CallAsync('Callback', 0), 2)
+  ! echo hi
+  :echomsg g:callback_stdout
+  ~ hi
+  :echomsg g:invocation.stdout
+  ~ hi
+
+It is also possible to force synchronous execution.
+
+  :call maktaba#syscall#SetAsyncDisabledForTesting(1)
+  :call maktaba#syscall#ForceSyncFallbackAllowedForTesting(1)
+  :let g:invocation = AsyncWait(g:syscall.CallAsync('Callback', 0), 2)
+  ! echo hi.*
+
+  :call maktaba#syscall#SetAsyncDisabledForTesting(0)
+  :call maktaba#syscall#ForceSyncFallbackAllowedForTesting(0)
+
+Asynchronous calls can also take a stdin parameter.
+
+  :let g:syscall = maktaba#syscall#Create(['cat']).WithStdin("Hello")
+  :let g:invocation = AsyncWait(g:syscall.CallAsync('Callback', 0), 2)
+  ! cat
+  :echomsg g:invocation.stdout
+  ~ Hello
+
+And() and Or() can also be used to chain Asynchronous commands.
+
+  :let g:syscall = maktaba#syscall#Create('true').And('echo SUCCESS')
+  :let g:invocation = AsyncWait(g:syscall.CallAsync('Callback', 0), 2)
+  ! true && echo SUCCESS
+  :echomsg g:invocation.stdout
+  ~ SUCCESS
+
+  :let g:syscall = maktaba#syscall#Create('false').And('echo FAILURE')
+  :let g:invocation = AsyncWait(g:syscall.CallAsync('Callback', 0), 2)
+  ! false && echo FAILURE
+  :echomsg g:invocation.stdout
+  ~ FAILURE

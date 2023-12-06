@@ -1,0 +1,27 @@
+When you source the maktaba bootstrap file, it does two things. First, it puts
+maktaba on your runtimepath. This makes maktaba functions available and ensures
+that maktaba plugin files will run when vim setup is complete.
+
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let &runtimepath .= ',' . g:maktabadir
+
+Second, it checks that vi-compatibility mode is OFF. Maktaba is does not support
+vi-compatibility mode! If you're installing maktaba manually, make sure you turn
+off vi compatibility. The maktaba#CheckCompatibility function will do this for
+you, and will print a nice warning message if you were in the wrong mode.
+
+  :call maktaba#compatibility#Disable()
+  ~ Vi compatibility mode was on.
+  ~ Maktaba does not support vi compatibility; it has been turned off.
+  ~ :set nocompatible early in your vimrc to avoid this message.
+  ~ See :help compatible for details.
+
+  :echomsg &compatible
+  ~ 0
+
+Now maktaba will work fine.
+
+Using the maktaba bootstrap file will ensure that you get helpful warnings if
+compatibility mode was on. If you promise to turn vi compatibility mode off,
+though, you're more than welcome to add maktaba to your runtimepath without
+sourcing the bootstrap file.

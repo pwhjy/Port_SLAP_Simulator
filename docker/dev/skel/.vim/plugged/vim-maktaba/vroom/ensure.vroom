@@ -1,0 +1,241 @@
+maktaba#value provides some good utilities for checking whether values are how
+they should be. A very common pattern in vimscript involves not only CHECKING
+that values are appropriate, but ENFORCING the same. For those cases, you want
+the maktaba#ensure functions.
+
+First things first, we have to install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+The maktaba#ensure functions are very similar to their maktaba#value
+counterparts, except they throw exceptions when the values are inappropriate.
+
+This is commonly useful when you're checking that function arguments have the
+appropriate type. For instance:
+
+  :function! MyFunction(string) abort
+  :  call maktaba#ensure#IsString(a:string)
+  :  return a:string
+  :endfunction
+  :echomsg MyFunction('hello')
+  ~ hello
+
+  :let g:myfn = maktaba#function#Create('MyFunction')
+  :call maktaba#error#Try(g:myfn.WithArgs(123))
+  ~ ERROR(WrongType): Expected a string. Got a number.
+
+The ensure# functions are mostly counterparts to the functions defined in
+maktaba#value. For example, you can ensure that variable takes on an expected
+value:
+
+  :let x = 'string'
+  :call maktaba#ensure#IsEqual(x, 'string')
+
+  :let g:iseq = maktaba#function#Create('maktaba#ensure#IsEqual')
+  :call maktaba#error#Try(g:iseq.WithArgs(x, 'strong'))
+  ~ ERROR(BadValue): Expected 'string'. Got 'strong'.
+
+Perhaps more often useful are the function that ensures a value takes on one of
+a few expected values:
+
+  :call maktaba#ensure#IsIn('on', ['on', 'off'])
+
+  :let g:isin = maktaba#function#Create('maktaba#ensure#IsIn')
+  :call maktaba#error#Try(g:isin.WithArgs('false', ['on', 'off']))
+  ~ ERROR(BadValue): Expected one of 'on' or 'off'. Got 'false'.
+
+and the function that ensures a value passes a predicate:
+
+  :function! BiggerThanEight(x) abort
+  :  return a:x > 8
+  :endfunction
+
+  :call maktaba#ensure#Passes(10, 'BiggerThanEight')
+
+  :let g:passes = maktaba#function#Create('maktaba#ensure#Passes')
+  :call maktaba#error#Try(g:passes.WithArgs(7, 'BiggerThanEight'))
+  ~ ERROR(BadValue): 7 failed to pass predicate.
+
+These can be powerful ways to make sure you're dealing with sane arguments in
+function definitions.
+
+
+
+Two other ensure# functions are often useful for checking preconditions or when
+writing tests:
+
+  :call maktaba#ensure#IsTrue(1 == 1, 'Sanity check.')
+  :let g:istrue = maktaba#function#Create('maktaba#ensure#IsTrue')
+  :call maktaba#error#Try(g:istrue.WithArgs(1 == 2, 'Insanity check.'))
+  ~ ERROR(Failure): Insanity check.
+
+These functions check a simple conditional, and throw Failure on failure.
+
+  :call maktaba#ensure#IsFalse(2 + 2 == 5, 'Math still works.')
+  :let g:isfalse = maktaba#function#Create('maktaba#ensure#IsFalse')
+  :call maktaba#error#Try(g:isfalse.WithArgs(
+  |    2 + 2 == 4,
+  |    'TWO AND TWO ARE %s',
+  |    'FIVE'))
+  ~ ERROR(Failure): TWO AND TWO ARE FIVE
+
+Notice that you can send format args to the failure messages. You may also leave
+the failure messages off entirely:
+
+  :call maktaba#ensure#IsTrue(1 + 2 == 3)
+
+This is not recommended, but is often convenient when writing tests.
+
+
+
+You can also make assertions about the type of a value, analogously to
+maktaba#value:
+
+  :call maktaba#ensure#TypeMatches(100, 0)
+  :call maktaba#ensure#TypeMatchesOneOf(10, [0, 0.0])
+  :call maktaba#ensure#TypeMatchesOneOf(10.0, [0, 0.0])
+
+  :let g:sharestype = maktaba#function#Create('maktaba#ensure#TypeMatches')
+  :call maktaba#error#Try(g:sharestype.WithArgs(100, 0.0))
+  ~ ERROR(WrongType): Expected a float. Got a number.
+
+  :let g:typeisin = maktaba#function#Create('maktaba#ensure#TypeMatchesOneOf')
+  :call maktaba#error#Try(g:typeisin.WithArgs('10', [0, 0.0]))
+  ~ ERROR(WrongType): Expected a number or float. Got a string.
+
+For specific use cases, it's recommended that you use the handy synonyms
+enumerated below. They are defined both for builtin vim types:
+
+  :call maktaba#ensure#IsNumber(0)
+  :let g:isnum = maktaba#function#Create('maktaba#ensure#IsNumber')
+  :call maktaba#error#Try(g:isnum.WithArgs('10'))
+  ~ ERROR(WrongType): Expected a number. Got a string.
+
+  :call maktaba#ensure#IsFloat(6.28)
+  :let g:isfloat = maktaba#function#Create('maktaba#ensure#IsFloat')
+  :call maktaba#error#Try(g:isfloat.WithArgs(3))
+  ~ ERROR(WrongType): Expected a float. Got a number.
+
+  :call maktaba#ensure#IsString('Hello, world!')
+  :let g:isstr = maktaba#function#Create('maktaba#ensure#IsString')
+  :call maktaba#error#Try(g:isstr.WithArgs(1337))
+  ~ ERROR(WrongType): Expected a string. Got a number.
+
+  :call maktaba#ensure#IsList([])
+  :let g:islist = maktaba#function#Create('maktaba#ensure#IsList')
+  :call maktaba#error#Try(g:islist.WithArgs('LIST'))
+  ~ ERROR(WrongType): Expected a list. Got a string.
+
+  :call maktaba#ensure#IsDict({})
+  :let g:isdict = maktaba#function#Create('maktaba#ensure#IsDict')
+  :call maktaba#error#Try(g:isdict.WithArgs('DICT'))
+  ~ ERROR(WrongType): Expected a dictionary. Got a string.
+
+and for all special type collections that maktaba#value supports:
+
+Collections:
+
+  :call maktaba#ensure#IsCollection([])
+  :call maktaba#ensure#IsCollection({})
+  :let g:iscollection = maktaba#function#Create('maktaba#ensure#IsCollection')
+  :call maktaba#error#Try(g:iscollection.WithArgs(''))
+  ~ ERROR(WrongType): Expected a list or dictionary. Got a string.
+
+Numerics:
+
+  :call maktaba#ensure#IsNumeric(0)
+  :call maktaba#ensure#IsNumeric(0.0)
+  :let g:isnumish = maktaba#function#WithArgs('maktaba#ensure#IsNumeric')
+  :call maktaba#error#Try(g:isnumish.WithArgs(''))
+  ~ ERROR(WrongType): Expected a number or float. Got a string.
+
+Callables:
+
+  :call maktaba#ensure#IsCallable('empty')
+  :call maktaba#ensure#IsCallable(function('empty'))
+  :call maktaba#ensure#IsCallable(maktaba#function#Create('empty'))
+  :let g:iscallable = maktaba#function#Create('maktaba#ensure#IsCallable')
+  :call maktaba#error#Try(g:iscallable.WithArgs(10))
+  ~ ERROR(WrongType): Expected a string or dictionary or funcref. Got a number.
+  :call maktaba#error#Try(g:iscallable.WithArgs({}))
+  ~ ERROR(BadValue): Dictionary with keys [] is not a maktaba function.
+
+Maktaba enum objects are also properly identified:
+
+  :call maktaba#ensure#IsEnum(maktaba#enum#Create(['ENUM']))
+  :let g:isenum = maktaba#function#Create('maktaba#ensure#IsEnum')
+  :call maktaba#error#Try(g:isenum.WithArgs(10))
+  ~ ERROR(WrongType): Expected a dictionary. Got a number.
+  :call maktaba#error#Try(g:isenum.WithArgs({}))
+  ~ ERROR(BadValue): Dictionary with keys [] is not a maktaba enum.
+
+
+There's a utility function to ensure that a string matches a regex:
+
+  :call maktaba#ensure#Matches('mu', '\vm(ii)*u')
+  :let g:matches = maktaba#function#Create('maktaba#ensure#Matches')
+  :call maktaba#error#Try(g:matches.WithArgs(
+  |    'mu',
+  |    'Do dogs have the Buddha nature?'))
+  ~ ERROR(BadValue): 'mu' does not match 'Do dogs have the Buddha nature?'.
+
+
+
+Finally, there are a handful of checks that enforce properties on filepaths.
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':h')
+  :let g:thisfile = $VROOMFILE
+  :let g:nonexistent = tempname()
+
+maktaba#ensure#PathExists, maktaba#ensure#IsDirectory, and maktaba#ensure#IsFile
+help you make sure you're working with real filepaths.
+
+  :call maktaba#ensure#PathExists(g:thisdir)
+  :call maktaba#ensure#PathExists(g:thisfile)
+  :let g:exists = maktaba#function#Create('maktaba#ensure#PathExists')
+  :call maktaba#error#Try(g:exists.WithArgs(g:nonexistent))
+  ~ ERROR(NotFound): File or directory * (glob)
+
+  :call maktaba#ensure#IsFile(g:thisfile)
+  :let g:isfile = maktaba#function#Create('maktaba#ensure#IsFile')
+  :call maktaba#error#Try(g:isfile.WithArgs(g:thisdir))
+  ~ ERROR(BadValue): * is a directory. (glob)
+  :call maktaba#error#Try(g:isfile.WithArgs(g:nonexistent))
+  ~ ERROR(NotFound): File * (glob)
+
+  :call maktaba#ensure#IsDirectory(g:thisdir)
+  :let g:isdir = maktaba#function#Create('maktaba#ensure#IsDirectory')
+  :call maktaba#error#Try(g:isdir.WithArgs(g:thisfile))
+  ~ ERROR(BadValue): * is a file. (glob)
+  :call maktaba#error#Try(g:isdir.WithArgs(g:nonexistent))
+  ~ ERROR(NotFound): Directory * (glob)
+
+maktaba#ensure#FileReadable and maktaba#ensure#FileWritable are often useful
+before file manipulation.
+
+  :let canread = maktaba#function#Create('maktaba#ensure#FileReadable')
+  :let canwrite = maktaba#function#Create('maktaba#ensure#FileWritable')
+  :call maktaba#error#Try(g:canread.WithArgs(g:nonexistent))
+  ~ ERROR(NotFound): File * (glob)
+  :call maktaba#error#Try(g:canwrite.WithArgs(g:nonexistent))
+  ~ ERROR(NotFound): File * (glob)
+  :call writefile(['Hello, world!'], g:nonexistent)
+  :call maktaba#ensure#FileReadable(g:nonexistent)
+  :call maktaba#ensure#FileWritable(g:nonexistent)
+
+maktaba#ensure#IsAbsolute and maktaba#ensure#IsRelative help you verify the type
+of path you're working with, without worrying about whether it's already on the
+filesystem.
+
+  :call maktaba#ensure#IsAbsolutePath('/only/the/sith')
+  :let g:isabsolute = maktaba#function#Create('maktaba#ensure#IsAbsolutePath')
+  :call maktaba#error#Try(g:isabsolute.WithArgs('the/light/side'))
+  ~ ERROR(BadValue): the/light/side is not an absolute path.
+
+  :call maktaba#ensure#IsRelativePath('just/like/your/opinion/man')
+  :let g:isrelative = maktaba#function#Create('maktaba#ensure#IsRelativePath')
+  :call maktaba#error#Try(g:isrelative.WithArgs('/abso/lutely'))
+  ~ ERROR(BadValue): /abso/lutely is not a relative path.

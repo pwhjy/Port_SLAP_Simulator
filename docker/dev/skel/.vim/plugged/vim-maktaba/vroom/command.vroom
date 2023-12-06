@@ -1,0 +1,20 @@
+Sometimes somebody's written a command that is very useful: and which you want
+to use in a vim function. The problem is, their command outputs a lot of data
+without returning any of it in a usable form.
+
+Fortunately, maktaba has your back. Before you see how, let's get maktaba
+installed:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+The function you want is maktaba#command#GetOutput. It's just about as easy as
+it sounds.
+
+  :command TestCommand echomsg 'Some' | echomsg 'Data'
+  :echomsg maktaba#command#GetOutput('TestCommand')
+  ~ Some^@Data
+
+(The ^@ denotes a newline).

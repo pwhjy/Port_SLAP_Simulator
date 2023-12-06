@@ -1,0 +1,194 @@
+Maktaba allows plugins to define extension points that other plugins can
+make use of. For example, a code formatting plugin could allow other plugins
+to register extensions to handle specific file types.
+
+This provides a convenient alternative to separating out the registration
+functionality into a separate library plugin, which is annoying if there
+would otherwise be no reason for that separate plugin to exist.
+
+Before we can see how this all works, we'll have to install Maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+and a fake plugin:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:repo = maktaba#path#Join([g:thisdir, 'fakeplugins'])
+  :let g:pluginpath = maktaba#path#Join([g:repo, 'myplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:pluginpath)
+
+Plugins have an individual 'extension registry' that holds all the
+extensions registered for use by that plugin.
+
+A plugin obtain its own extension registry via the existing plugin object.
+
+  :let g:registry = g:plugin.GetExtensionRegistry()
+
+A plugin's extension registry contains functions to modify and query the
+list of extensions registered for that plugin, and to define what makes a
+valid extension.
+
+Extensions are arbitrary dictionaries, so a plugin providing an extension
+point can optionally (and should) register a validator that will check that
+a provided extension is acceptable, via the extension registry's
+SetValidator() function.
+
+  :function! MyFormatterValidator(extension) abort
+  :  if !has_key(a:extension, 'filetype')
+  :    throw maktaba#error#BadValue('No filetype.')
+  :  endif
+  :  if !has_key(a:extension, 'command')
+  :    throw maktaba#error#BadValue('No command.')
+  :  endif
+  :endfunction
+  :call g:registry.SetValidator('MyFormatterValidator')
+
+SetValidator() accepts a string, funcref, or Maktaba function dictionary,
+just like maktaba#function#Call().
+
+
+Now, when a second plugin comes to register an extension for the above
+plugin to use, it must also get access to that plugin's extension registry.
+
+Note that the second plugin cannot use the above mechanism to do so, as it
+would require that plugin to load the first plugin directly, which would
+only be permitted if that was a library plugin.
+
+Instead, Maktaba allows plugins to register extensions against the name of
+the original plugin. This does not require that the original plugin is
+installed (or even that it will be installed - it is not an error to
+register extensions against plugins that the user is not using).
+
+The following would normally be run from a separate plugin during loading,
+but for the purposes of exposition, we're going to make the calls directly.
+
+This time, the extension registry is obtained from a call to
+maktaba#extension#GetRegistry().
+
+  :let g:registry = maktaba#extension#GetRegistry('myplugin')
+
+Once the plugin has an extension registry for the target plugin, it can add
+extensions using the AddExtension() function.
+
+  :let g:foo_extension = {'filetype': 'foo', 'command': 'foo-format'}
+  :call g:registry.AddExtension(g:foo_extension)
+
+If the original plugin has registered a validator (as is the case here), the
+validator will be called to verify the extension.  Any errors returned from
+the validator will be shouted to the user (and will prevent the extension
+from being registered), but will not be propagated to the caller.
+
+  :let g:registry = maktaba#extension#GetRegistry('myplugin')
+  :let g:bad_extension = {'command': 'bad-format'}
+  :call g:registry.AddExtension(g:bad_extension)
+  ~ ERROR(BadValue): No filetype.
+  :let g:bar_extension = {'filetype': 'bar', 'command': 'bar-format'}
+  :call g:registry.AddExtension(g:bar_extension)
+
+The original plugin can now retrieve the list of extensions from its
+extension registry.
+
+  :let g:registry = g:plugin.GetExtensionRegistry()
+  :echomsg string(g:registry.GetExtensions())
+  ~ [{'filetype': 'bar', 'command': 'bar-format'},
+  | {'filetype': 'foo', 'command': 'foo-format'}]
+
+New extensions are inserted at the front of the list, with one exception,
+noted below.
+
+
+Note that the registry object returned by maktaba#extension#GetRegistry() is
+limited compared to the one returned by GetExtensionRegistry() in that the
+SetValidator() and GetExtensions() functions are not implemented.
+
+  :let g:registry = maktaba#extension#GetRegistry('myplugin')
+  :call maktaba#error#Try(maktaba#function#Method(g:registry, 'GetExtensions'))
+  ~ ERROR(NotImplemented): Not accessible by external plugins.
+  :call maktaba#error#Try(maktaba#function#Method(g:registry, 'SetValidator')
+  |.WithArgs('MyFormatterValidator'))
+  ~ ERROR(NotImplemented): Not accessible by external plugins.
+
+Extensions can also be registered by the plugin providing the extension
+point, which can used as a way of providing default implementations that
+other plugins can override.
+
+This is done simply by calling AddExtension(), as usual.
+
+  :let g:registry = g:plugin.GetExtensionRegistry()
+  :let g:baz_extension = {'filetype': 'baz', 'command': 'baz-format'}
+  :call g:registry.AddExtension(g:baz_extension)
+  :echomsg string(g:registry.GetExtensions())
+  ~ [{'filetype': 'bar', 'command': 'bar-format'},
+  | {'filetype': 'foo', 'command': 'foo-format'},
+  | {'filetype': 'baz', 'command': 'baz-format'}]
+
+There is one important difference here: extensions added via the internal
+interface will always follow those added via the external interface.
+
+The rationale behind this ordering is that is easier for plugins to choose
+the first applicable extension (if more than one is applicable), and that
+plugin authors may also wish to register extensions that provide some form
+of 'default' functionality that can be overridden by a (possibly earlier)
+call to AddExtension() by an external plugin.
+
+
+As mentioned above, plugins may register an extension before the plugin
+providing the extension point is installed (if it is installed at all).
+
+Here we'll register an extension for the emptyplugin plugin.
+
+  :let g:registry = maktaba#extension#GetRegistry('emptyplugin')
+  :let g:empty_extension = {'emptiness': 'empty'}
+  :call g:registry.AddExtension(g:empty_extension)
+
+We could choose not to install that plugin, but we'll do so now.
+
+  :let g:emptypluginpath = maktaba#path#Join([g:repo, 'emptyplugin'])
+  :let g:emptyplugin = maktaba#plugin#Install(g:emptypluginpath)
+
+The emptyplugin plugin already has access to the extension we added.
+
+  :let g:registry = g:emptyplugin.GetExtensionRegistry()
+  :echomsg string(g:registry.GetExtensions())
+  ~ [{'emptiness': 'empty'}]
+
+
+Let's add one of the extensions we defined earlier as well.
+
+  :let g:registry = maktaba#extension#GetRegistry('emptyplugin')
+  :call g:registry.AddExtension(g:foo_extension)
+
+If the emptyplugin plugin now sets a validator, Maktaba will check the
+extensions that have already been added to make sure that they are still
+valid.  We'll reuse the validator we had before, so the first extension we
+added above will fail.
+
+  :let g:registry = g:emptyplugin.GetExtensionRegistry()
+  :call g:registry.SetValidator('MyFormatterValidator')
+  ~ ERROR(BadValue): No filetype.
+
+As AddExtension() did, SetValidator() will shout validation errors to the
+user, but will also remove extensions that no longer validate.
+
+  :echomsg string(g:registry.GetExtensions())
+  ~ [{'filetype': 'foo', 'command': 'foo-format'}]
+
+We can change the current validator to something more permissive, though
+that won't bring back the invalid extension.
+
+  :call g:registry.SetValidator(maktaba#function#FromExpr('0'))
+  :echomsg string(g:registry.GetExtensions())
+  ~ [{'filetype': 'foo', 'command': 'foo-format'}]
+
+We can add it back, though.
+
+  :let g:registry = maktaba#extension#GetRegistry('emptyplugin')
+  :call g:registry.AddExtension(g:empty_extension)
+
+  :let g:registry = g:emptyplugin.GetExtensionRegistry()
+  :echomsg string(g:registry.GetExtensions())
+  ~ [{'emptiness': 'empty'},
+  | {'filetype': 'foo', 'command': 'foo-format'}]

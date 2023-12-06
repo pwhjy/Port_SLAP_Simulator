@@ -1,0 +1,42 @@
+Maktaba can help you generate help tags for a file. Let's try it out. We begin
+by installing maktaba and fakeplugins/myplugin:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+We need write access to the plugin in order to generate help files, so let's
+copy it to a tmp directory:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:srcpath = maktaba#path#Join([g:thisdir, 'fakeplugins', 'myplugin'])
+  :let g:tmpdir = fnamemodify(tempname(), ':h')
+  :call maktaba#system#Call(['cp', '-R', g:srcpath, g:tmpdir])
+  :let g:pluginpath = maktaba#path#Join([g:tmpdir, 'myplugin'])
+  :let g:myplugin = maktaba#plugin#Install(g:pluginpath)
+
+Observe: There is no bunny in the hat:
+
+  :let g:tagfile = maktaba#path#Join([g:pluginpath, 'doc', 'tags'])
+  :call maktaba#ensure#IsFalse(maktaba#path#Exists(g:tagfile))
+
+Maktaba makes them for us:
+
+  :call g:myplugin.GenerateHelpTags()
+
+And now the helpfiles exist!
+
+  :call maktaba#ensure#IsTrue(maktaba#path#Exists(g:tagfile))
+
+Not only that, but the helpfiles are useful.
+
+  :help myhelp
+                                                                       *myhelp*
+  These are my help files.
+
+Well... somewhat.
+
+Now let's reset the test for next time:
+
+  :call maktaba#system#Call(['rm', '-R', g:pluginpath])

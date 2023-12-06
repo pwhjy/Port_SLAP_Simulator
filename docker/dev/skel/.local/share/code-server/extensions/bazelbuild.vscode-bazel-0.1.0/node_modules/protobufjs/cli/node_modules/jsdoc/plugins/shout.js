@@ -1,0 +1,17 @@
+/**
+ * This is just an example.
+ *
+ * @module plugins/shout
+ */
+'use strict';
+
+exports.handlers = {
+    /**
+     * Make your descriptions more shoutier.
+     */
+    newDoclet: function(e) {
+        if (typeof e.doclet.description === 'string') {
+            e.doclet.description = e.doclet.description.toUpperCase();
+        }
+    }
+};

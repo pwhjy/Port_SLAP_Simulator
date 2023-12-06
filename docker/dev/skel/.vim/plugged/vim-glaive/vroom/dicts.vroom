@@ -1,0 +1,112 @@
+This test file puts glaive dicts through their paces. See glaive.vroom for an
+introduction to glaive syntax.
+
+Install glaive:
+
+  :set nocompatible
+  :let g:glaivedir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:glaivedir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Install a plugin:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+Define a dict flag:
+
+  :call g:plugin.Flag('dict', {'key': 'value'})
+
+Utility function for checking the dict value:
+
+  :function! Is(value) abort
+  :  call maktaba#ensure#IsEqual(g:plugin.Flag('dict'), a:value)
+  :endfunction
+
+
+You can set simple dicts by using simple comma-separated key:value pairs.
+
+  :Glaive fullplugin dict=a:1,b:2,c:3
+  :call Is({'a': 1, 'b': 2, 'c': 3})
+
+Be careful, though -- only alphanumeric characters, periods, hyphens, and
+underscores are allowed.
+
+  :Glaive fullplugin dict=me:me@mine.com,you:you@yours.net
+  ~ ERROR(BadValue): * (glob)
+
+For more complicated dicts, use evaluating syntax:
+
+  :Glaive fullplugin dict=`{'me': 'me@mine.com', 'you': 'you@yours.net'}`
+  :call Is({'me': 'me@mine.com', 'you': 'you@yours.net'})
+
+This allows you to specify your dicts precisely.
+
+You may set dictionary keys directly:
+
+  :Glaive fullplugin dict[me]='new@fancy.com'
+  :call Is({'me': 'new@fancy.com', 'you': 'you@yours.net'})
+
+If you set a flag without giving it a value it will be set to the NUMBER one.
+Setting a flag without an operator will ALWAYS set it to the number one,
+regardless of the original type of the flag.
+
+  :Glaive fullplugin dict
+  :call Is(1)
+
+Similarly, banging a dict flag will set it to the NUMBER zero, not the dict
+zero. Banging a flag ALWAYS sets it to integral zero, regardless of the original
+type of the flag.
+
+  :Glaive fullplugin dict='oops'
+  :Glaive fullplugin !dict
+  :call Is(0)
+
+Let's make the flag a dict again:
+
+  :Glaive fullplugin dict=key:value
+
+You may set a dict to the empty dict by leaving off the value.
+
+  :Glaive fullplugin dict=
+  :call Is({})
+
+You can merge dictionaries with the += operator. The new value takes precedence.
+
+  :Glaive fullplugin dict=a:1,b:2
+  :Glaive fullplugin dict+=a:2,c:2
+  :call Is({'a': 2, 'b': 2, 'c': 2})
+
+You can remove keys with the -= operator. You can pass it a single key:
+
+  :Glaive fullplugin dict-=a
+  :call Is({'b': 2, 'c': 2})
+
+Or a list of keys:
+
+  :Glaive fullplugin dict-=b,c
+  :call Is({})
+
+Removing non-existent keys is not a big deal.
+
+  :Glaive fullplugin dict-=a
+  :call Is({})
+
+If you want different functionality, you may always use a callback.
+
+  :Glaive fullplugin dict=`{'key': 'value', 'ley': 'walue'}`
+  :Glaive fullplugin dict`=keys
+  :Glaive fullplugin dict`=sort
+  :call Is(['key', 'ley'])
+
+Notice that you're welcome to change the type of the flag (despite the name).
+Let's set it back to a dictionary.
+
+  :Glaive fullplugin dict=`{}`
+
+Dictionaries may not be inverted. What would that even mean?
+
+  :call maktaba#error#TryCommand('Glaive fullplugin ~dict')
+  ~ ERROR(WrongType): Could not set ~dict in fullplugin.
+  | Expected a number. Got a dictionary.

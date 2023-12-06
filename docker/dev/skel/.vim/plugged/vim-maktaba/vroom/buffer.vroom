@@ -1,0 +1,262 @@
+Vim provides powerful features for users to manipulate buffers. However, these
+features aren't very nice to plugin authors. maktaba#buffer bridges the gap with
+utilities for plugin authors to cleanly manipulate vim buffers.
+
+But before we dive into things, let's get maktaba installed:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Vim is missing a way to look up the text under a visual selection, for use in
+visual mode mappings for instance. maktaba#buffer#GetVisualSelection provides
+that.
+
+  :function CheckEqual(actual, expected) abort<CR>
+  |  return maktaba#ensure#IsEqual(a:expected, a:actual)<CR>
+  |endfunction
+
+  % Line 1<CR>
+  |Line 2<CR>
+  |Line 3<CR>
+  |Line 4<CR>
+  |Line 5<CR>
+  |Line 6
+
+  > 3gg5|v4gg$
+  :<C-U>call CheckEqual(maktaba#buffer#GetVisualSelection(), " 3\nLine 4")
+
+  > 4ggV5gg
+  :<C-U>call CheckEqual(maktaba#buffer#GetVisualSelection(), "Line 4\nLine 5")
+
+(The <C-U> is necessary to clear the range, since these aren't range functions.)
+
+It robustly handles unusual cases like vim's 'virtualedit' modes too, where the
+visual selection may start halfway into a tab or end beyond the end of a line.
+
+  @clear
+  % Line 1<CR>
+  |<Tab>Line 2<CR>
+  |Line 3
+
+  :set virtualedit=all
+  > /Line 2<CR>hvf2ll
+  :<C-U>call CheckEqual(maktaba#buffer#GetVisualSelection(), "\tLine 2")
+
+  :set virtualedit&
+
+
+
+Vim has a few built-in utilities for inserting text into buffers, but they're
+limited. maktaba#buffer#Overwrite lets plugin authors replace a range of lines
+with some given text.
+
+Let's try it out. First, we'll need a file with some data:
+
+  % Line 1<CR>
+  |Line 2<CR>
+  |Line 3<CR>
+  |Line 4<CR>
+  |Line 5<CR>
+  |Line 6
+  :echomsg line('$')
+  ~ 6
+  Line 1
+  Line 2
+  Line 3
+  Line 4
+  Line 5
+  Line 6
+
+Now let's jump somewhere memoable and save the cursor line and column:
+
+  > 2gg2|
+  :let g:col = col('.')
+
+Let's replace line 4 with 2 lines of junk:
+
+  :call maktaba#buffer#Overwrite(4, 4, ['junk junk junk', 'junk junk junk'])
+  :echomsg line('$')
+  ~ 7
+  Line 1
+  Line 2
+  Line 3
+  junk junk junk
+  junk junk junk
+  Line 5
+  Line 6
+
+Now we'll remove line 1:
+
+  :call maktaba#buffer#Overwrite(1, 1, [])
+  :echomsg line('$')
+  ~ 6
+  Line 2
+  Line 3
+  junk junk junk
+  junk junk junk
+  Line 5
+  Line 6
+
+Notice the cursor is still on "Line 2" even though it just became line 1.
+  :echomsg line('.') == 1 && col('.') == g:col
+  ~ 1
+
+Overwrite won't change more lines than it has to. If the text to replace already
+matches the replacement text, nothing is changed:
+
+  :let g:changedtick = b:changedtick
+  :call maktaba#buffer#Overwrite(3, 5,
+  | ['junk junk junk', 'junk junk junk', 'Line 5'])
+  :echomsg line('$')
+  ~ 6
+  Line 2
+  Line 3
+  junk junk junk
+  junk junk junk
+  Line 5
+  Line 6
+  :echomsg b:changedtick == g:changedtick
+  ~ 1
+
+Overwrite checks that the start and end lines are valid line numbers, and that
+the start line isn't after the end line:
+
+  :let g:overwrite = maktaba#function#Create('maktaba#buffer#Overwrite')
+  :call maktaba#error#Try(g:overwrite.WithArgs(0, 3, []))
+  ~ ERROR(BadValue): Startline must be positive, not 0.
+  :call maktaba#error#Try(g:overwrite.WithArgs(-1, 3, []))
+  ~ ERROR(BadValue): Startline must be positive, not -1.
+  :call maktaba#error#Try(g:overwrite.WithArgs(7, 8, []))
+  ~ ERROR(BadValue): Startline must be a valid line number, not 7.
+  :call maktaba#error#Try(g:overwrite.WithArgs(1, 0, []))
+  ~ ERROR(BadValue): Endline must be positive, not 0.
+  :call maktaba#error#Try(g:overwrite.WithArgs(6, 7, []))
+  ~ ERROR(BadValue): Endline must be a valid line number, not 7.
+  :call maktaba#error#Try(g:overwrite.WithArgs(6, 5, []))
+  ~ ERROR(BadValue): Startline 6 greater than endline 5.
+  :call maktaba#buffer#Overwrite(6, 6, [])
+  :echomsg line('$')
+  ~ 5
+
+
+
+Vim's :substitute (better known as :s) is one of its most powerful features.
+However, its behavior depends upon whether the user has set 'gdefault', for one
+thing, and for another thing it jumps the cursor around the screen as it
+replaces things. Furthermore, if there are no matches then :substitute prints an
+angry error message.
+
+If you ever find yourself wanting to find-and-replace in a plugin, you might
+find yourself reaching for :substitute. You should resist this urge! It's very
+hard to use :substitute right in a plugin. Fortunately, maktaba provides a
+utility to make your life easier.
+
+maktaba#buffer#Substitute is the programmer's replacement for :substitute. It
+will find and replace a pattern in a setting-agnostic manner. By default, it
+does not print an error if there are no matches. Most importantly, it doesn't
+jump the cursor around: you can use maktaba#buffer#Substitute without losing the
+user's position in the file.
+
+Let's try it out. First, we'll need a file with some data:
+
+  > 8OSome some some data data data.<ESC>
+  Some some some data data data.
+  Some some some data data data.
+  Some some some data data data.
+  Some some some data data data.
+  Some some some data data data.
+  Some some some data data data.
+  Some some some data data data.
+  Some some some data data data.
+
+Now let's jump somewhere memoable and save the cursor line and column:
+
+  > 2gg2|
+  :let g:line = line('.')
+  :let g:col = col('.')
+
+First, let's remove the extraneous 'some's:
+
+  :call maktaba#buffer#Substitute('some ', '')
+  Some data data data.
+  Some data data data.
+  Some data data data.
+  Some data data data.
+  Some data data data.
+  Some data data data.
+  Some data data data.
+  Some data data data.
+
+Notice that the substitute acted like 'gdefault' was on, even though it isn't:
+
+  :echomsg &gdefault
+  ~ 0
+
+We can turn that off by passing the 'g' flag:
+
+  :call maktaba#buffer#Substitute(' data', '', 'g')
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+
+Only one ' data' was removed per line.
+
+maktaba#buffer#Substitute always respects case, even if the user has set
+'ignorecase':
+
+  :set ignorecase
+  :call maktaba#buffer#Substitute(' DaTa', '')
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+  Some data data.
+
+You can turn this off with the 'I' flag.
+
+  :call maktaba#buffer#Substitute(' DaTa', '', 'gi')
+  Some data.
+  Some data.
+  Some data.
+  Some data.
+  Some data.
+  Some data.
+  Some data.
+  Some data.
+
+You may have noticed that maktaba#buffer#Substitute doesn't complain if the
+match is empty. You can turn errors back on with the 'e' flag if you're into
+that.
+
+  :let g:substitute = maktaba#function#Create('maktaba#buffer#Substitute')
+  :call maktaba#error#Try(g:substitute.WithArgs('No data', 'All data', 'e'))
+  ~ Vim(substitute):E486: Pattern not found: No data
+
+You can also modify a specific range using the fourth and fifth arguments:
+
+  :call maktaba#buffer#Substitute('Some ', 'No ', '', 5, 8)
+  Some data.
+  Some data.
+  Some data.
+  Some data.
+  No data.
+  No data.
+  No data.
+  No data.
+
+And the best part?
+
+  :echomsg line('.') == g:line && col('.') == g:col
+  ~ 1
+
+The cursor hasn't moved.

@@ -1,0 +1,156 @@
+Maktaba plugins should message the user as little as possible, generally only
+for errors or before long-running operations. But for when the user wants to
+peek under the hood to troubleshoot odd behavior, or just out of curiosity, it's
+convenient to have a log of recent interesting events.
+
+Maktaba comes with a plugin logging interface built-in so that plugin developers
+can add relevant log messages in their plugins without having to stress about
+how to get log messages where they need to go.
+
+Before we dive in, let's install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+  :let g:maktaba = maktaba#Maktaba()
+
+To log messages from maktaba, you need to first create a logger interface for
+the context your code is running under.
+
+  :let g:vroom_logger = maktaba#log#Logger('VROOMFILE')
+
+This logger allows you to post log messages through the maktaba API, capturing
+the context name and timestamp for each message. The logger interface exposes
+the usual Debug, Info, Warn, Error, and Severe functions:
+
+  :call g:vroom_logger.Debug('why')
+  :call g:vroom_logger.Info('hello')
+  :call g:vroom_logger.Warn('there')
+  ~ [VROOMFILE] there
+  :call g:vroom_logger.Error('my')
+  ~ [VROOMFILE] my
+  :call g:vroom_logger.Severe('friend')
+  ~ [VROOMFILE] friend
+
+By default, messages logged at WARN or above are also shown immediately to the
+user. Call maktaba#log#SetNotificationLevel to configure a different level.
+
+  :let g:LEVELS = maktaba#log#LEVELS
+  :call maktaba#log#SetNotificationLevel(g:LEVELS.SEVERE)
+  :call g:vroom_logger.Error('Threepio! Where could he be?!')
+  :call g:vroom_logger.Severe('Shut down all the garbage mashers!!')
+  ~ [VROOMFILE] Shut down all the garbage mashers!!
+
+Setting the display level to -1 disables printing these log messages completely.
+
+  :call maktaba#log#SetNotificationLevel(-1)
+  :call g:vroom_logger.Severe('Shut down all the garbage mashers!!')
+
+
+Each plugin gets a logger attached automatically for its context:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:pluginpath = maktaba#path#Join(
+  |[g:thisdir, 'fakeplugins', 'emptyplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:pluginpath)
+
+  :let g:plugin.logger.Debug('Hello from emptyplugin')
+
+On the consumption side of things, maktaba provides maktaba#log, a simple
+callback-based API for log viewing plugins to subscribe to log messages as they
+arrive.
+
+  :let g:LEVELS = maktaba#log#LEVELS
+  :function FormatSingleEntry(entry) abort<CR>
+  |  return maktaba#log#GetFormattedEntries([a:entry], g:LEVELS.DEBUG)[0]<CR>
+  |endfunction
+  :function LogHandler(entry) abort<CR>
+  |  echomsg 'Log message: ' . FormatSingleEntry(a:entry)<CR>
+  |endfunction
+  :let g:rm_echohandler = maktaba#log#AddHandler('LogHandler', 1)
+
+Since a few log messages can come very early in initialization, and it may be
+awkward to get a logger plugin installed before anything else that needs it,
+maktaba holds on to a few recent messages for you. Here come the messages we
+logged earlier...
+
+  ~ Log message: DEBUG [-0-9T:]+ \[VROOMFILE\] why (regex)
+  ~ Log message: INFO [-0-9T:]+ \[VROOMFILE\] hello (regex)
+  ~ Log message: WARN [-0-9T:]+ \[VROOMFILE\] there (regex)
+  ~ Log message: ERROR [-0-9T:]+ \[VROOMFILE\] my (regex)
+  ~ Log message: SEVERE [-0-9T:]+ \[VROOMFILE\] friend (regex)
+  ~ .* (regex)
+  ~ .* (regex)
+  ~ .* (regex)
+  ~ Log message: DEBUG [-0-9T:]+ \[emptyplugin\] Hello from emptyplugin (regex)
+
+New messages are logged as they arrive.
+
+  :call g:vroom_logger.Debug('This just in.')
+  ~ Log message: DEBUG [-0-9T:]+ \[VROOMFILE\] This just in\. (regex)
+
+You may have noticed the return value from maktaba#log#AddHandler being saved as
+g:rm_echohandler above. AddHandler returns a remover function you can use to
+un-register the handler again.
+
+  @messages (STRICT)
+  :call maktaba#function#Call(g:rm_echohandler)
+  :call g:vroom_logger.Debug('Hey! Who turned out the lights?')
+  @messages
+
+If you want to register a handler that doesn't receive recent messages (just new
+messages logged after it's registered), the fire_recent argument to AddHandler
+lets you control that.
+
+  :let g:rm_echohandler = maktaba#log#AddHandler('LogHandler', 0)
+  :call g:vroom_logger.Info('I am now totally awake.')
+  ~ Log message: INFO [-0-9T:]+ \[VROOMFILE\] I am now totally awake\. (regex)
+
+  :call maktaba#function#Call(g:rm_echohandler)
+
+The log handler function should take a single argument, an opaque data structure
+representing a log entry. Older versions of maktaba expected a handler function
+that takes 4 arguments, and that signature is still supported as a legacy
+fallback for now.
+
+  :function LegacyLogHandler(level, timestamp, context, message) abort<CR>
+  |  echomsg 'Log message (legacy): ' . FormatSingleEntry(
+  |[a:level, a:timestamp, a:context, a:message])<CR>
+  |endfunction
+  :let g:rm_echohandler = maktaba#log#AddHandler('LegacyLogHandler', 0)
+  :call g:vroom_logger.Info('Testing.')
+  ~ Log message \(legacy\): INFO [-0-9T:]+ \[VROOMFILE\] Testing\. (regex)
+
+  :call maktaba#function#Call(g:rm_echohandler)
+
+
+As mentioned above, maktaba holds on to a few recent messages for convenience.
+But that's not made to be long-term storage. maktaba holds a few recent
+messages (controlled by vim's 'history' setting, which usually defaults to 50).
+Beyond that, it truncates with a message to let you know it truncated (so it
+doesn't silently drop history and leave you wondering why a particular message
+isn't there).
+
+  :let g:n_messages_seen = 0
+  :function FirstFewHandler(entry) abort<CR>
+  |  if g:n_messages_seen < 3<CR>
+  |    echomsg 'Log message: ' . FormatSingleEntry(a:entry)<CR>
+  |  endif<CR>
+  |  let g:n_messages_seen += 1<CR>
+  |endfunction
+
+  :let g:i = 0
+  :while g:i < &history + 1
+  :  call g:vroom_logger.Debug('Message ' . string(g:i))
+  :  let g:i += 1
+  :endwhile
+  :call maktaba#log#AddHandler('FirstFewHandler', 1)
+  ~ Log message: INFO [-0-9T:]+ \[maktaba\] [0-9]+ messages not (regex)
+  | available because logging was configured late.
+  ~ Log message: DEBUG [-0-9T:]+ \[VROOMFILE\] Message 2 (regex)
+  ~ Log message: DEBUG [-0-9T:]+ \[VROOMFILE\] Message 3 (regex)
+
+This limit is not configurable, but it should give you more than enough headroom
+to get a real log collection plugin installed and running without losing
+messages.

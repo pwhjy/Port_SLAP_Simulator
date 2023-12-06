@@ -1,0 +1,216 @@
+Let's take a direct look at flag objects. These are objects that are useful
+for configuring your plugins. They're a little nicer to use than global
+settings.
+
+Normally, plugin authors will interact with flags via the plugin object (see
+pluginflags.vroom) and users will interact with flags via the commands defined
+in other plugins (such as Glaive). This file covers the low-level flag API,
+which you can use for advanced flag behavior such as callbacks and translators.
+
+Before we get started, we have to install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+A flag object can be created with maktaba#flags#Create. Just give it a name and
+an optional default.
+
+  :let g:empty = maktaba#flags#Create('empty')
+  :let g:full = maktaba#flags#Create('full', 10)
+
+Flags are initialized to zero by default. You can use the Get function to get
+a flag's value:
+
+  :echomsg g:empty.Get()
+  ~ 0
+  :echomsg g:full.Get()
+  ~ 10
+
+and Set to set it, of course.
+
+  :call g:full.Set(g:full.Get() - 1)
+  :echomsg g:full.Get()
+  ~ 9
+
+Get and Set can take an optional list of foci, used to get or set portions of
+a deeply nested flag. Allow me to demonstrate:
+
+  :let g:complex = maktaba#flags#Create('complex', {'top': {'list': [0, 0]}})
+  :call g:complex.Set(1, ['top', 'list', 1])
+  :echomsg string(g:complex.Get(['top', 'list']))
+  ~ [0, 1]
+
+Such foci work as a proxy to maktaba#value#Focus, see value.vroom for details.
+
+
+
+You can gain direct access to flag values via the Get function. These values are
+IMMUTABLE.
+
+  :let g:remove = maktaba#function#Create('remove')
+  :let g:flagval = g:complex.Get()
+  :call maktaba#error#Try(g:remove.WithArgs(g:flagval.top, 'list'))
+  ~ *E741: Value is locked* (glob)
+
+If you want to do advanced manipulations on the flag you can use the GetCopy
+function to get a copy of the flag.
+
+  :let g:value = g:complex.GetCopy()
+  :call remove(g:value.top, 'list')
+
+This, of course, will not modify the actual flag.
+
+  :echomsg string(g:complex.Get())
+  ~ {'top': {'list': [0, 1]}}
+
+You have to call Set() with the changed value in order to set the flag.
+
+  :call g:complex.Set(g:value)
+  :echomsg string(g:complex.Get())
+  ~ {'top': {}}
+
+This ensures that callbacks and translators (explained below) always have
+a chance to fire.
+
+
+
+All flags can have Callbacks and Translators attached. Callbacks are attached
+using the AddCallback function.
+
+  :function! LoudCallback(value) abort
+  :  echomsg printf('HEY THE VALUE IS %s', a:value)
+  :endfunction
+  :call g:full.AddCallback(function('LoudCallback'))
+  ~ HEY THE VALUE IS 9
+
+and they are also called after the flag is set at any point thereafter:
+
+  :call g:full.Set(8)
+  ~ HEY THE VALUE IS 8
+
+Notice that the callback function receives the new value as a parameter.
+
+Callbacks are applied in the order that you register them.
+
+  :function! Second(value) abort
+  :  echomsg 'FIRST! Wait...'
+  :endfunction
+  :let g:rmsecond = g:full.AddCallback('Second')
+  ~ FIRST! Wait...
+
+Remember that callbacks are fired once when they're attached, AND at every change
+thereafter.
+
+  :call g:full.Set(3)
+  ~ HEY THE VALUE IS 3
+  ~ FIRST! Wait...
+
+The fire-when-attached behavior can also be suppressed by setting the
+fire_immediately parameter to zero. This is useful if your callback should only
+fire when a value is changed from the current value.
+
+  :function! Changed(value) abort
+  :  echomsg 'Changed!'
+  :endfunction
+  :call g:full.AddCallback('Changed', 0)
+
+  :call g:full.Set(1)
+  ~ HEY THE VALUE IS 1
+  ~ FIRST! Wait...
+  ~ Changed!
+
+You may have noticed that AddCallback returns a function. This function can be
+used to remove a registered callback:
+
+  :call maktaba#function#Apply(g:rmsecond)
+  :call g:full.Set(4)
+  ~ HEY THE VALUE IS 4
+  ~ Changed!
+
+
+
+Flags may also have translators. These functions receive the value being set to
+the flag and translate it to a different value. The flag will actually be set to
+the return value of the last translator. Translators are called in order, with
+the return value of the first being passed to the second, and so on. The API is
+similar to the callback API.
+
+  :let g:somestring = maktaba#flags#Create('somestring', '  mystring  ')
+
+  :call g:somestring.AddTranslator('maktaba#string#Strip')
+  :let g:unup = g:somestring.AddTranslator(function('toupper'))
+  :echomsg g:somestring.Get()
+  ~ MYSTRING
+
+Notice that translators (and callbacks, as it were) are fired immediately upon
+being attached. This makes sure that your value is never stale when you have
+translators attached. They're also fired every time you set the flag afterwards,
+of course:
+
+  :call g:somestring.Set('        oh no, whitespace!      ')
+  :echomsg g:somestring.Get()
+  ~ OH NO, WHITESPACE!
+
+Translators are very useful whenever you want to clean and/or normalize the
+user's input.
+
+Like callbacks, translators can be removed by the functions returned by the
+AddTranslator call.
+
+  :call maktaba#function#Apply(g:unup)
+  :call g:somestring.Set('        oh no, whitespace!      ')
+  :echomsg g:somestring.Get()
+  ~ oh no, whitespace!
+
+
+You cannot remove an item twice. The function will throw 'AlreadyRemoved' if you
+try to do so:
+
+  :call maktaba#error#Try(g:unup)
+  ~ ERROR(AlreadyRemoved): Cannot remove a thing twice.
+
+
+
+Note that if translators fail, the flag will be restored to its prior value.
+
+  :let g:flag = maktaba#flags#Create('flag', '  mystring  ')
+  :call g:flag.AddTranslator('maktaba#string#Strip')
+  :echomsg g:flag.Get()
+  ~ mystring
+
+  :function! Death(value) abort
+  :  throw maktaba#error#Message('Bleh', 'I am slain!')
+  :endfunction
+
+Remember that translator will be applied immediately:
+
+  :let g:addtrans = maktaba#function#Method(g:flag, 'AddTranslator')
+  :call maktaba#error#Try(g:addtrans.WithArgs('Death'))
+  ~ ERROR(Bleh): I am slain!
+
+This obviously does not change the value.
+
+  :echomsg g:flag.Get()
+  ~ mystring
+
+Now, notice how even if we try to change the value, failing translators will
+prevent the changes from being committed:
+
+  :let g:set = maktaba#function#Method(g:flag, 'Set')
+  :call maktaba#error#Try(g:set.WithArgs('  new  '))
+  ~ ERROR(Bleh): I am slain!
+
+  :echomsg g:flag.Get()
+  ~ mystring
+
+This ensures that the flag will never be set to a "dirty" value (so long as it
+has ever been a clean value), once translators are registered.
+
+
+
+In general, plugin authors will interact with flags via the plugin Flag
+function, and users will interact with flags via plugins like Glaive. You really
+only need to touch the flag objects when you want to set up translators and
+callbacks.

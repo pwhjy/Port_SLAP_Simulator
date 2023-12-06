@@ -1,0 +1,17 @@
+{
+    "editor.formatOnSave": true,
+    "clangd.arguments": [
+        "-clang-tidy",
+        "--header-insertion=never"
+    ],
+    "python.formatting.provider": "autopep8",
+    "files.enableTrash": false,
+    "bazel.buildifierExecutable": "buildifier",
+    "bazel.executable": "bazel",
+    "javascript.validate.enable": false,
+    "editor.fontFamily": "Consolas, 'Droid Sans Mono', 'monospace', monospace, 'Droid Sans Fallback'",
+    "lldb.adapterType": "native",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.python"
+    },
+}

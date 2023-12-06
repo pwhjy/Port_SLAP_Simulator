@@ -1,0 +1,25 @@
+Before we dive into things, let's get maktaba installed:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Maktaba provides a simple utility function that clears all autocommands in an
+augroup and then removes the augroup.
+
+  :augroup testgroup
+  :autocmd CursorHold * echomsg 'Cursor holding...'
+  :augroup END
+  :doautoall CursorHold
+  ~ Cursor holding...
+
+  :call maktaba#autocmd#ClearGroup('testgroup')
+
+  @messages (STRICT)
+  :doautoall CursorHold
+  @messages
+
+Plugin authors should use this when clearing augroups to make sure that they
+don't leave orphaned autocmds lying around. Executing 'augroup! GROUP' will
+remove GROUP, but it won't remove its autocmds. Be careful!

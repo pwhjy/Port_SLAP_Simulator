@@ -1,0 +1,536 @@
+Global plugin settings are a soul-rending, albeit heretofore necessary, evil.
+They're global, for one thing: you've got to remember to confine them to ad-hoc
+namespaces. There's no way to enforce consistency in naming: Sooner or later you
+have to set g:SomePluginsCamelCasedSetting, g:inconsistent_under_scores,
+g:too_trse, or g:settings_named_such_that_they_barely_fit_on_one_line.
+
+The atrocities committed by global settings are not limited to violations of
+aesthetic sensibilities. Global settings are also brittle. Imagine you've
+written a plugin that has a configuration option specifying a list of
+directories. Maybe you initialize the variable like this:
+
+01 if !exists('g:myplugin_searched_directories')
+02   let g:myplugin_searched_directories = ['/first', '/second']
+03 endif
+
+The user can modify which directories are searched by modifying this global
+variable, right? Well, no. See, your code lives in a plugin/ directory
+somewhere, and the user configures your plugin via their .vimrc file, and their
+vimrc runs before your global setting is defined. They can *override* your list,
+but they cannot extend it. Global settings are hobbled. This makes it difficult
+for plugin authors to provide robust defaults for complex configurations, and
+frustrating for users who just want to tweak the defaults.
+
+Last but not least, global settings are opaque to both developers and users.
+Which global settings can be set on the fly? Plugin authors have no way of
+listening for changes to global settings, and users have no confidence that
+changing global settings will affect plugin behavior after vimrc time.
+
+All of these problems are addressed in maktaba plugins. Maktaba plugins use
+flags, which are defined the moment a plugin is installed. Maktaba flags are not
+global variables. You can attach callback functions to them. You can attach
+functions that scrub and normalize the user input. You can subvert all of the
+problems mentioned above.
+
+You do this with maktaba settings. Maktaba provides a standardized syntax for
+declaring changes to flags. These changes are referred to as "settings", and can
+be applied to plugin objects.
+
+Note that maktaba DOES NOT provide commands or other methods of exposing
+settings to users. Maktaba is a LIBRARY, and provides only a setting API. To use
+maktaba settings, check out plugins like Glaive.
+
+With that in mind, let's take a tour of the maktaba setting syntax. First, we
+need to install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Now let's install a plugin:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+For reference, this plugin defines the following flags:
+
+- empty=0
+- number=0
+- float=0.0
+- string=''
+- list=[]
+- dict={}
+- function=function('empty')
+
+We will be manipulating these flags using maktaba settings.
+
+Here are some quick examples of how maktaba#setting works:
+
+  :call maktaba#setting#Create('number=8').Apply(g:plugin)
+  :echomsg g:plugin.Flag('number')
+  ~ 8
+
+  :call maktaba#setting#Create('number+=3').Apply(g:plugin)
+  :echomsg g:plugin.Flag('number')
+  ~ 11
+
+  :call maktaba#setting#Create('!number').Apply(g:plugin)
+  :echomsg g:plugin.Flag('number')
+  ~ 0
+
+  :call maktaba#setting#Create('dict=`{"key": "value"}`').Apply(g:plugin)
+  :echomsg string(g:plugin.Flag('dict'))
+  ~ {'key': 'value'}
+
+  :call maktaba#setting#Create('dict[key]="nom"').Apply(g:plugin)
+  :echomsg string(g:plugin.Flag('dict'))
+  ~ {'key': 'nom'}
+
+  :call maktaba#setting#Create('dict=').Apply(g:plugin)
+  :echomsg string(g:plugin.Flag('dict'))
+  ~ {}
+
+
+Let's formalize that somewhat. Maktaba settings have the four parts:
+
+[UNARY OPERATOR][FLAG HANDLE][BINARY OPERATOR][VALUE]
+
+Unary operators are optional and may not be used with binary operators.
+Valid unary operators are ! (set to 0) and ~ (invert, number-only).
+
+The flag handle consists of a flag name and an optional series of flag foci. See
+the docs of maktaba#setting#Handle() for details.
+
+The binary operator is optional. Valid binary operators are = += -= ^= $= and
+`=. The first four are self-evident. ^= and $= prepend and append to lists and
+strings, respectively. `= sets the value of the flag to the result of calling
+the function named by the value.
+
+If no operator (binary nor unary) is given then the flag is set to 1.
+
+The value is optional. If omitted, the flag will be cleared in accordance to its
+current type (see maktaba#value#EmptyValue). If present, it must follow a binary
+operator. Values may be placed in single or double quotes (in which case they
+are strings), backticks (in which case the contents of the backticks are eval'd
+to get the value), or may be raw numbers (integer or floating point). There
+exists shortcut syntax for simple strings, lists and dictionaries. See the docs
+of maktaba#setting#Create() for more details.
+
+
+Now let's have a closer look at maktaba setting objects. They can be created
+with maktaba#setting#Create.
+
+  :let g:setting = maktaba#setting#Create('number+=1')
+
+They can be applied to a plugin.
+
+  :call g:setting.Apply(g:plugin)
+  :echomsg g:plugin.Flag('number')
+  ~ 1
+
+They are reusable, and can be applied multiple times (to multiple plugins). They
+return the new value of the flag, for convenience.
+
+  :echomsg g:setting.Apply(g:plugin)
+  ~ 2
+  :echomsg g:setting.Apply(g:plugin)
+  ~ 3
+
+If you apply a setting to a plugin that tries to access an invalid flag, you'll
+get errors.
+
+  :function TryMethod(dict, funcname, ...) abort<CR>
+  |  let l:func = maktaba#function#Method(a:dict, a:funcname)<CR>
+  |  return maktaba#error#Try(maktaba#function#Create(l:func, a:000))<CR>
+  |endfunction
+  :let g:setting = maktaba#setting#Create('badflag=hah')
+  :call TryMethod(g:setting, 'Apply', g:plugin)
+  ~ ERROR(NotFound): Flag "badflag" not defined in fullplugin.
+
+In fact, you'll get informative error messages for all manner of invalid
+settings.
+
+  :function Try(funcname, ...) abort<CR>
+  |  return maktaba#error#Try(maktaba#function#Create(a:funcname, a:000))<CR>
+  |endfunction
+  :call Try('maktaba#setting#Create', 'bad=flag=yes')
+  ~ ERROR(BadValue): Junk after setting "bad=flag": "=yes".* (glob)
+  :call Try('maktaba#setting#Create', 'junk=w#!rd')
+  ~ ERROR(BadValue): Junk after setting "junk=w": "#!rd".* (glob)
+  :call Try('maktaba#setting#Create', 'bad=foo::bar')
+  ~ ERROR(BadValue): Could not parse value on setting "bad=": ":bar" contains
+  | invalid characters. (Did you forget quotes?).
+  :call Try('maktaba#setting#Create', '!!nope')
+  ~ ERROR(BadValue): No flag name (or invalid flag prefix) in setting "!!nope".
+  :call Try('maktaba#setting#Create', '=3')
+  ~ ERROR(BadValue): No flag name (or invalid flag prefix) in setting "=3".
+
+You can also use maktaba#setting#Parse to parse a single setting from a string
+describing many settings (separated by whitespace). It returns both the parsed
+setting and the remainder of the string.
+
+  :let [g:inc, g:leftover] = maktaba#setting#Parse('number+=1 number-=1')
+  :let [g:dec, g:leftover] = maktaba#setting#Parse(g:leftover)
+  :echomsg g:inc.Apply(g:plugin)
+  ~ 4
+  :echomsg g:dec.Apply(g:plugin)
+  ~ 3
+  :call maktaba#ensure#IsTrue(empty(g:leftover))
+
+
+
+As a shortcut, you can also use maktaba#setting#ParseAll to parse an entire
+whitespace-separated string of settings at once.
+
+  :let [g:inc, g:dec] = maktaba#setting#ParseAll('number+=1 number-=1')
+  :echomsg g:inc.Apply(g:plugin)
+  ~ 4
+  :echomsg g:dec.Apply(g:plugin)
+  ~ 3
+
+Sometimes it is useful to parse only a flag handle. The function
+maktaba#setting#Handle will parse a handle into a flag name and a focus list
+(assuming that the argument is a complete handle).
+
+  :echomsg string(maktaba#setting#Handle('flag'))
+  ~ ['flag', []]
+  :echomsg string(maktaba#setting#Handle('flag[1][nested][part]'))
+  ~ ['flag', [1, 'nested', 'part']]
+
+maktaba#setting#ParseHandle will parse a handle and return the leftover string
+along with the flagname and the focus list.
+
+  :echomsg string(maktaba#setting#ParseHandle('flag[part]more'))
+  ~ ['flag', ['part'], 'more']
+
+See the documentation for maktaba#setting#Handle for more details on flag handle
+syntax. See the pluginflags.vroom file for an example of how flag handles are
+put to good use.
+
+
+
+The remainder of file tests all the little corners of the setting syntax. You're
+invited to browse if you want to learn all the maktaba#setting tricks, but
+casual readers should eject now.
+
+First, these functions will make the tests more concise:
+
+  :" Asserts that {x} = {y}
+  :function! Is(x, y) abort
+  :  call maktaba#ensure#IsEqual(a:y, a:x)
+  :endfunction
+
+  :" Sets all the flags in g:plugin back to their original types and values.
+  :function! Reset() abort
+  :  call maktaba#setting#Create('empty=0').Apply(g:plugin)
+  :  call maktaba#setting#Create('number=0').Apply(g:plugin)
+  :  call maktaba#setting#Create('float=0.0').Apply(g:plugin)
+  :  call maktaba#setting#Create('string=""').Apply(g:plugin)
+  :  call maktaba#setting#Create('list=`[]`').Apply(g:plugin)
+  :  call maktaba#setting#Create('dict=`{}`').Apply(g:plugin)
+  :  call maktaba#setting#Create('function=`function("empty")`').Apply(g:plugin)
+  :endfunction
+
+  :" Parses {setting} and applies it to g:plugin.
+  :function! Apply(setting) abort
+  :  return maktaba#setting#Create(a:setting).Apply(g:plugin)
+  :endfunction
+
+  :" Asserts that applying {setting} to g:plugin fails and matches {regex}.
+  :function! Fails(setting, regex) abort
+  :  let l:setting = maktaba#setting#Create(a:setting)
+  :  try
+  :    return l:setting.Apply(g:plugin) |
+  |  catch /.*/
+  :    if a:0 >= 1
+  :      call maktaba#ensure#Matches(v:exception, '\V' . a:1)
+  :    endif
+  :  endtry
+  :endfunction
+
+
+
+1. Settings without operators
+
+A setting without an operator ALWAYS sets the value of that flag to 1,
+REGARDLESS of the original type of the flag. Observe:
+
+  :call Reset()
+  :call Is(1, Apply('empty'))
+  :call Is(1, Apply('number'))
+  :call Is(1, Apply('float'))
+  :call Is(1, Apply('string'))
+  :call Is(1, Apply('list'))
+  :call Is(1, Apply('dict'))
+  :call Is(1, Apply('function'))
+
+They're all numbers now, despite their names and their original types.
+
+
+
+2. The ! unary operation
+
+A banged setting ALWAYS sets the value of that flag to 0, REGARDLESS of the
+original type of the flag. Observe:
+
+  :call Reset()
+  :call Is(0, Apply('!empty'))
+  :call Is(0, Apply('!number'))
+  :call Is(0, Apply('!float'))
+  :call Is(0, Apply('!string'))
+  :call Is(0, Apply('!list'))
+  :call Is(0, Apply('!dict'))
+  :call Is(0, Apply('!function'))
+
+They're all numbers now, despite their names and their original types.
+
+
+
+3. The ~ unary operation
+
+  :call Reset()
+
+You can invert numbers:
+
+  :call Is(1, Apply('~number'))
+  :call Is(0, Apply('~number'))
+
+But everything else fails:
+
+  :call Fails('~float', 'ERROR(WrongType)')
+  :call Fails('~list', 'ERROR(WrongType)')
+  :call Fails('~dict', 'ERROR(WrongType)')
+  :call Fails('~string', 'ERROR(WrongType)')
+  :call Fails('~function', 'ERROR(WrongType)')
+
+
+
+4. The = operator
+
+4a. Single quoted strings
+
+  :call Is("single quotes", Apply("string='single quotes'"))
+  :call Is("'escaped' quotes", Apply("string='''escaped'' quotes'"))
+  :call Is("no \backslash escaping", Apply("string='no \backslash escaping'"))
+
+4b. Double quoted strings
+
+  :call Is('double quotes', Apply('string="double quotes"'))
+  :call Is('"escaped" quotes', Apply('string="\"escaped\" quotes"'))
+  :call Is("actual\tescapes", Apply('string="actual\tescapes"'))
+
+4c. Backtick evaluation
+
+Fun fact: People come up with significantly different answers depending upon
+whether they're asked to estimate (under time pressure) 1*2*3*4*5*6*7*8 versus
+8*7*6*5*4*3*2*1.
+
+  :call Is(1*2*3*4*5*6*7*8, Apply("number=`8*7*6*5*4*3*2*1`"))
+  :call Is(6.28, Apply("float=`2*3.14`"))
+  :call Is('feh', Apply("string=`substitute('foo', 'oo', 'eh', '')`"))
+  :call Is(['#1', '#2'], Apply("list=`['#1', '#2']`"))
+  :call Is({'me': 'me@mine.com'}, Apply("dict=`{'me': 'me@mine.com'}`"))
+  :call Is(function('empty'), Apply("function=`function('empty')`"))
+
+4d. Integers
+
+  :call Is(3, Apply('number=3'))
+
+4e. Floats
+
+Floating point values MUST start with a numeral. The decimal place cannot come
+first.
+
+  :call Is(6.28, Apply('number=6.28'))
+  :call Is(0.5, Apply('number=0.5'))
+
+4f. Simple strings
+
+Simple strings [a-zA-Z0-9._-] are parsed as strings, even without quotes.
+
+  :call Is('word', Apply('string=word'))
+
+4g. Simple lists
+
+Simple strings and numbers separated by commas are parsed as lists.
+
+  :call Is(['a', 'b', 3], Apply('list=a,b,3'))
+
+4h. Simple dicts
+
+Simple key:value pairs, comma-separated by commas, are parsed as dicts.
+
+  :call Is({'a': 1, 'b': 2, 'c': 3}, Apply('dict=a:1,b:2,c:3'))
+
+This works for singleton dicts as well.
+
+  :call Is({'key': 'value'}, Apply('dict=key:value'))
+
+4i. Default values
+
+If you leave off a value, the flag is emptied. See maktaba#value#EmptyValue. The
+reset function actually sets them to their empty values, so we have to modify
+them all first.
+
+  :call Apply('number=1')
+  :call Apply('float=1.0')
+  :call Apply('list=1,2,3')
+  :call Apply('dict=one:1')
+  :call Apply('string=one')
+  :call Apply('function=`function("Apply")`')
+
+  :call Is(0, Apply('number='))
+  :call Is(0.0, Apply('float='))
+  :call Is('', Apply('string='))
+  :call Is([], Apply('list='))
+  :call Is({}, Apply('dict='))
+  :call Is(function('empty'), Apply('function='))
+
+
+
+5. The += operator
+
+The += operator works for integers, floats, lists, dicts, and strings in the
+obvious fashion.
+
+  :call Reset()
+  :call Is(8, Apply('number+=8'))
+  :call Is(6.28, Apply('float+=6.28'))
+
+  :call Apply('list=a,b')
+  :call Is(['a', 'b', 'c', 'd'], Apply('list+=c,d'))
+
+  :call Apply('dict=foo:bar')
+  :call Is({'foo': 'bar', 'key': 'value'}, Apply('dict+=key:value'))
+
+Note that dictionaries are updated destructively by +=. If you need different
+behavior, use `=.
+
+  :call Apply('dict=')
+  :call Is({'a': 'b', 'key': 'new'}, Apply('dict+=a:b,key:new'))
+
+It does not work for functions.
+
+  :call Fails('function+=3', 'ERROR(WrongType)')
+
+
+
+6. The -= operator
+
+The -= operator works for integers, floats, lists, and dicts in the obvious
+fashion.
+
+  :call Reset()
+  :call Is(-5, Apply('number-=5'))
+  :call Is(-3.14, Apply('float-=3.14'))
+
+Note that ALL matching elements of a list are removed. If you need different
+behavior, use `=.
+
+  :call Apply('list=a,a,b,c,d,d')
+  :call Is(['b', 'c', 'd', 'd'], Apply('list-=a'))
+
+-= is used to remove keys from dictionaries.
+
+  :call Apply('dict=a:b,c:d')
+  :call Is({'a': 'b'}, Apply('dict-=c'))
+
+Corner cases are acceptable.
+
+  :call Is(8, Apply('number-=-13'))
+
+Functions and strings are not.
+
+  :call Fails('function-=anything', 'ERROR(WrongType)')
+  :call Fails("string-='what is this I don''t even'", 'ERROR(WrongType)')
+
+
+
+7. The ^= operator
+
+The ^= operator prepends to lists and strings.
+
+  :call Reset()
+  :call Apply('string=cd')
+  :call Apply('list=c,d')
+
+  :call Is('abcd', Apply('string^=ab'))
+  :call Is(['a', 'b', 'c', 'd'], Apply('list^=a,b'))
+
+It cannot be applied to other types.
+
+  :call Fails('number^=1', 'ERROR(WrongType)')
+  :call Fails('float^=1.0', 'ERROR(WrongType)')
+  :call Fails('dict^=a:b', 'ERROR(WrongType)')
+  :call Fails('function^=wat', 'ERROR(WrongType)')
+
+
+
+8. The $= operator
+
+$= is an alias for += that only works on lists and strings.
+
+  :call Reset()
+  :call Apply('string=ab')
+  :call Apply('list=a,b')
+
+  :call Is('abcd', Apply('string$=cd'))
+  :call Is(['a', 'b', 'c', 'd'], Apply('list$=c,d'))
+
+It cannot be applied to other types.
+
+  :call Fails('number^=1', 'ERROR(WrongType)')
+  :call Fails('float^=1.0', 'ERROR(WrongType)')
+  :call Fails('dict^=a:b', 'ERROR(WrongType)')
+  :call Fails('function^=wat', 'ERROR(WrongType)')
+
+
+
+9. The `= operator
+
+The value following the `= operator must be a string naming a function or an
+actual funcref. (In order to get a funcref value you'll need to use backticks).
+
+The flag will be set to the result of calling the function. This works on all
+types.
+
+  :function! Affect(value) abort
+  :  return maktaba#value#TypeName(a:value)
+  :endfunction
+  :call Reset()
+  :call Is('number', Apply('number`=Affect'))
+  :call Is('float', Apply('float`=Affect'))
+  :call Is('string', Apply('string`=Affect'))
+  :call Is('list', Apply('list`=Affect'))
+  :call Is('dictionary', Apply('dict`=Affect'))
+  :call Is('funcref', Apply('function`=Affect'))
+
+The `=`...` syntax works, even though it looks funny:
+
+  :call Apply('function=`function("empty")`')
+  :call Is('funcref', Apply('function`=`function("Affect")`'))
+
+
+
+10. Nested values
+
+You can use flag handle syntax to set specific parts of flags.
+
+  :call Reset()
+  :call Apply('dict=key:value')
+  :call Apply('list=a,b,c')
+
+  :call Is({'key': 'new'}, Apply('dict[key]=new'))
+  :call Is(['q', 'b', 'c'], Apply('list[0]=q'))
+
+This works for deeply nested complex flags.
+
+  :call Apply("dict=`{'outer': [{'inner': ['decoy', 'flag']}]}`")
+  :call Is('got', Apply('dict[outer][0][inner][1]=got')['outer'][0]['inner'][1])
+
+This will give you horrible errors if your flags aren't structured how you think
+they are.
+
+  :call Fails('dict[inner][7]=3', 'ERROR(BadValue)')

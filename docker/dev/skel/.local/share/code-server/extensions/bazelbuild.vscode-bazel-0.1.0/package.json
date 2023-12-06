@@ -1,0 +1,248 @@
+{
+	"name": "vscode-bazel",
+	"displayName": "vscode-bazel",
+	"description": "Bazel BUILD integration",
+	"version": "0.1.0",
+	"publisher": "BazelBuild",
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/bazelbuild/vscode-bazel.git"
+	},
+	"icon": "media/bazel-logo.png",
+	"engines": {
+		"vscode": "^1.27.0"
+	},
+	"categories": [
+		"Programming Languages"
+	],
+	"activationEvents": [
+		"onLanguage:starlark",
+		"onView:bazelWorkspace"
+	],
+	"main": "./out/src/extension/extension",
+	"contributes": {
+		"breakpoints": [
+			{
+				"language": "starlark"
+			}
+		],
+		"commands": [
+			{
+				"category": "Bazel",
+				"command": "bazel.buildTarget",
+				"title": "Build Target"
+			},
+			{
+				"category": "Bazel",
+				"command": "bazel.buildTargetWithDebugging",
+				"title": "Build Target with Debugging"
+			},
+			{
+				"category": "Bazel",
+				"command": "bazel.testTarget",
+				"title": "Test Target"
+			},
+			{
+				"category": "Bazel",
+				"command": "bazel.clean",
+				"title": "Clean"
+			},
+			{
+				"category": "Bazel",
+				"command": "bazel.refreshBazelBuildTargets",
+				"title": "Refresh Bazel Build Targets",
+				"icon": {
+					"dark": "./icons/refresh-dark.svg",
+					"light": "./icons/refresh-light.svg"
+				}
+			}
+		],
+		"configuration": {
+			"type": "object",
+			"title": "Bazel",
+			"properties": {
+				"bazel.executable": {
+					"type": "string",
+					"default": "",
+					"description": "The name of the Bazel executable. This may be an absolute path, or a simple name that will be searched for on the system path. If empty, \"bazel\" on the system path will be used."
+				},
+				"bazel.buildifierExecutable": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "The name of the Buildifier executable. This may be an absolute path, or a simple name that will be searched for on the system path. If empty, \"buildifier\" on the system path will be used.\n\nBuildifier can be downloaded from https://github.com/bazelbuild/buildtools/releases."
+				},
+				"bazel.buildifierFixOnFormat": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether to automatically apply lint fixes from buildifier when formatting a Bazel file."
+				}
+			}
+		},
+		"debuggers": [
+			{
+				"type": "bazel-launch-build",
+				"label": "Launch Bazel Build",
+				"program": "./out/src/debug-adapter/client.js",
+				"runtime": "node",
+				"configurationAttributes": {
+					"launch": {
+						"properties": {
+							"args": {
+								"type": "array",
+								"description": "Target labels and other command line options passed to the 'bazel build' command.",
+								"default": []
+							},
+							"bazelCommand": {
+								"type": "string",
+								"description": "The Bazel command to execute (e.g., build, test, etc.). Defaults to \"build\".",
+								"default": "build"
+							},
+							"bazelExecutablePath": {
+								"type": "string",
+								"description": "The name of the Bazel executable. This may be an absolute path, or a simple name that will be searched for on the system path. If empty, \"bazel\" on the system path will be used.",
+								"default": ""
+							},
+							"cwd": {
+								"type": "string",
+								"description": "The working directory in which Bazel will be launched.",
+								"default": ""
+							},
+							"port": {
+								"type": "number",
+								"description": "The port number of the Bazel debug server.",
+								"default": 7300
+							},
+							"verbose": {
+								"type": "boolean",
+								"description": "Show verbose logs for the debugger.",
+								"default": false
+							}
+						},
+						"required": [
+							"args",
+							"cwd"
+						]
+					}
+				}
+			}
+		],
+		"grammars": [
+			{
+				"language": "starlark",
+				"scopeName": "source.starlark",
+				"path": "./syntaxes/starlark.tmLanguage.json"
+			}
+		],
+		"languages": [
+			{
+				"id": "starlark",
+				"aliases": [
+					"Starlark",
+					"starlark",
+					"Bazel"
+				],
+				"extensions": [
+					".BUILD",
+					".WORKSPACE",
+					".bzl",
+					".sky"
+				],
+				"filenames": [
+					"BUILD",
+					"BUILD.bazel",
+					"WORKSPACE",
+					"WORKSPACE.bazel"
+				],
+				"configuration": "./syntaxes/starlark.configuration.json"
+			}
+		],
+		"menus": {
+			"view/item/context": [
+				{
+					"command": "bazel.buildTarget",
+					"when": "view == bazelWorkspace && viewItem == rule",
+					"group": "build"
+				},
+				{
+					"command": "bazel.buildTarget",
+					"when": "view == bazelWorkspace && viewItem == testRule",
+					"group": "build"
+				},
+				{
+					"command": "bazel.buildTargetWithDebugging",
+					"when": "view == bazelWorkspace && viewItem == rule",
+					"group": "build"
+				},
+				{
+					"command": "bazel.buildTargetWithDebugging",
+					"when": "view == bazelWorkspace && viewItem == testRule",
+					"group": "build"
+				},
+				{
+					"command": "bazel.testTarget",
+					"when": "view == bazelWorkspace && viewItem == testRule",
+					"group": "build"
+				}
+			],
+			"view/title": [
+				{
+					"command": "bazel.refreshBazelBuildTargets",
+					"when": "view == bazelWorkspace",
+					"group": "navigation"
+				}
+			]
+		},
+		"taskDefinitions": [
+			{
+				"type": "bazel",
+				"required": [
+					"command",
+					"targets"
+				],
+				"properties": {
+					"command": {
+						"type": "string",
+						"description": "The Bazel command to execute (\"build\" or \"test\")."
+					},
+					"targets": {
+						"type": "array",
+						"description": "The labels of the targets to build or test."
+					}
+				}
+			}
+		],
+		"views": {
+			"explorer": [
+				{
+					"id": "bazelWorkspace",
+					"name": "Bazel Build Targets"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"check-lint": "tslint 'src/**/*.ts' --exclude 'src/**/*.d.ts'",
+		"compile": "./scripts/build.sh -watch",
+		"postinstall": "node ./node_modules/vscode/bin/install",
+		"vscode:prepublish": "./scripts/build.sh",
+		"watch": "tsc -watch -p ./"
+	},
+	"devDependencies": {
+		"@types/node": "^6.0.40",
+		"tslint": "^5.11.0",
+		"typescript": "^3.0.0",
+		"vscode": "^1.0.0"
+	},
+	"dependencies": {
+		"protobufjs": "^6.8.0",
+		"vscode-debugadapter": "^1.27.0",
+		"vscode-debugprotocol": "^1.27.0",
+		"which": "^1.3.1"
+	},
+	"__metadata": {
+		"id": "e21a6113-833a-4583-b519-869fd1c1c384",
+		"publisherId": "d0cc863d-db86-44f6-92ad-3d363713d0a0",
+		"publisherDisplayName": "The Bazel Team"
+	}
+}

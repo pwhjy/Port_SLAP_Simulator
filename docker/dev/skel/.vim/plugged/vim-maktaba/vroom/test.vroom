@@ -1,0 +1,53 @@
+As always, we have to start by installing maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Maktaba provides some rudimentary test support. Currently, the only available
+function allows you to override functions.
+
+  :function! Real() abort
+  :  return 'Launching the nukes...'
+  :endfunction
+
+  :function! Fake() abort
+  :  return 'Lunching the flukes...'
+  :endfunction
+
+  :call maktaba#test#Override('Real', 'Fake')
+  :echomsg Real()
+  ~ Lunching the flukes...
+
+
+
+This is especially useful when you want to override an autoloaded function
+(which can only be done in appropriately named files):
+
+  :function! FakeDirectory(...) abort
+  :  echomsg 'I promise the directory was made.'
+  :endfunction
+
+  :call maktaba#test#Override('maktaba#path#MakeDirectory', 'FakeDirectory')
+
+  :call maktaba#path#MakeDirectory('/usr/bin/myland')
+  ~ I promise the directory was made.
+
+
+
+You can restore autoload functions using 'runtime' to source the original files.
+
+  :function! Wont(...) abort
+  :  return 'NO'
+  :endfunction
+
+  :call maktaba#test#Override('maktaba#path#Join', 'Wont')
+
+  :echomsg maktaba#path#Join(['these', 'components'])
+  ~ NO
+
+  :runtime autoload/maktaba/path.vim
+
+  :echomsg maktaba#path#Join(['these', 'components'])
+  ~ these/components

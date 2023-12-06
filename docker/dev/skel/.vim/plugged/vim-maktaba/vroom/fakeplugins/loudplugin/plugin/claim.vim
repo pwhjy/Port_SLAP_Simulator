@@ -1,0 +1,1 @@
+echomsg 'PLUGIN LOADED'

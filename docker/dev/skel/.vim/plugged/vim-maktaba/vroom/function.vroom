@@ -1,0 +1,340 @@
+Vimscript has funcrefs. These allow you to assign a function to a variable. This
+might make you think that vimscript has first class functions.
+
+It does not.
+
+You can pass function names around in variables (or as strings) and call them
+with the call() function, but you CANNOT create closures. You cannot queue
+arguments on a function. You can only pass around function NAMES, never
+functions with a context.
+
+Maktaba fixes that.
+
+Maktaba introduces its own "function" type. They're essentially dictionaries
+including a vimscript function name and some function context.
+
+Before we explore them, let's install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+  :let g:maktaba = maktaba#plugin#Get('maktaba')
+
+
+
+Very good. Now, to create a maktaba function, use the maktaba#function#Create
+function. The function takes a callable, a list of arguments, and an optional
+dictionary context (for dictionary functions).
+
+  :let g:dict = {'one': 'alpha', 'two': 'beta', 'three': 'gamma'}
+  :let g:getter = maktaba#function#Create(function('get'), [g:dict])
+
+If you happen to know that you're holding a maktaba function object (and not
+some other callable, such as a funcref or a string naming a function) you can
+apply the function using the attached "apply" method.
+
+  :echomsg g:getter.Apply('one')
+  ~ alpha
+  :echomsg g:getter.Apply('two')
+  ~ beta
+
+Normally, though, you can't know whether you're dealing with a maktaba function
+dictionary, a vimscript funcref, or a simple string naming a function. When
+that's the case, you can use the maktaba#function#Call function which works
+with any of the above.
+
+  :echomsg maktaba#function#Call(g:getter, ['three'])
+  ~ gamma
+  :echomsg maktaba#function#Call(function('get'), [g:dict, 'three'])
+  ~ gamma
+  :echomsg maktaba#function#Call('get', [g:dict, 'three'])
+  ~ gamma
+
+As a shortcut, funcdicts have a 'Call' method  which acts similarly.
+
+  :echomsg maktaba#function#Create('get').Call([g:dict, 'three'])
+  ~ gamma
+
+For convenience, you may also use maktaba#function#Apply, which allows you to
+pass in arguments one by one (instead of passing them as a list).
+
+  :echomsg maktaba#function#Apply('get', g:dict, 'three')
+  ~ gamma
+
+This has some limitations compared to maktaba#function#Call: it cannot set the
+function's dictionary context, for instance. Also, vim functions can take at
+most 20 arguments. Because the first argument of maktaba#function#Apply is used
+to specify the function, it can only apply 19 arguments. So long as these
+limitations do not hinder you, however, this is often a more natural way to
+apply functions.
+
+
+
+Sometimes you want to use dict functions:
+
+  :function! Get(key) dict abort
+  :  return self[a:key]
+  :endfunction
+  :let g:getone = maktaba#function#Create('Get', ['one'], g:dict)
+  :echomsg g:getone.Apply()
+  ~ alpha
+
+It's also worth noting that, if a function requires no arguments, you can leave
+the arglist off of #Apply entirely.
+
+  :echomsg maktaba#function#Call(g:getone)
+  ~ alpha
+
+Also, you can use #Call to change the dictionary context, though this is not
+necessarily recommended.
+
+  :echomsg maktaba#function#Call(g:getone, [], {'one': 'uno'})
+  ~ uno
+
+
+
+There are a few ways to queue up additional args onto an existing function
+object. You can create an entirely new function object using #Create:
+
+  :let g:getter = maktaba#function#Create('get', [g:dict])
+  :let g:getone = maktaba#function#Create(g:getter, ['one'])
+
+Now they are both distinct function objects.
+
+  :echomsg g:getter.Apply('one')
+  ~ alpha
+  :echomsg g:getone.Apply()
+  ~ alpha
+
+This function object is colloquially referred to as a "funcdict".
+
+
+
+Note that you can extend funcdicts with further calls to
+maktaba#function#Create:
+
+  :let g:getter = maktaba#function#Create('get', [g:dict])
+  :let g:getone = maktaba#function#Create(g:getter, ['one'])
+  :echomsg g:getone.Apply()
+  ~ alpha
+
+Like the builtin call() function, #Create takes an arglist and a dictionary. If
+you only care about arguments, there's a simpler shorthand that doesn't require
+you to put the queued arguments in a list:
+
+  :let g:getter = maktaba#function#WithArgs('get', g:dict)
+  :echomsg g:getter.Apply('one')
+  ~ alpha
+
+This works on existing funcdicts, of course.
+
+  :let g:getone = maktaba#function#WithArgs(g:getter, 'one')
+  :echomsg g:getone.Apply()
+  ~ alpha
+
+And with multiple arguments at once, as expected:
+
+  :echomsg maktaba#function#WithArgs('get', g:dict, 'one').Apply()
+  ~ alpha
+
+In funcdicts, there's a shortcut to using this function:
+
+  :echomsg maktaba#function#Create('get').WithArgs(g:dict).Apply('one')
+  ~ alpha
+
+This is often a convenient way to extend funcdicts.
+
+
+
+You can also set the dictionary context for a function using the
+maktaba#function#WithContext function. This works in the obvious way.
+
+  :function! MyName() dict abort
+  :  return self.name
+  :endfunction
+
+  :let g:aname = maktaba#function#Create('MyName', [], {'name': 'Alfred'})
+  :echomsg maktaba#function#Call(g:aname)
+  ~ Alfred
+
+  :let g:bname = maktaba#function#WithContext(g:aname, {'name': 'Beth'})
+  :echomsg g:bname.Apply()
+  ~ Beth
+
+The maktaba#function functions never modify funcdicts, they only ever create new
+ones. Calling #WithContext creates a new object, the original remains unchanged.
+
+  :echomsg g:aname.Apply()
+  ~ Alfred
+
+As with WithArgs, there is a shortcut to this function in funcdicts:
+
+  :let g:template = maktaba#function#Create('MyName')
+  :echomsg g:template.WithContext({'name': 'Carl'}).Apply()
+  ~ Carl
+
+
+
+If you've ever attached methods to dictionaries, you've probably run into some
+trouble. At first, they look nice:
+
+  :let g:object = {'name': 'Mrs. Object', 'Name': function('MyName')}
+  :echomsg g:object.Name()
+  ~ Mrs. Object
+
+But you soon realize that vim isn't very smart about dictionary methods. As soon
+as you extract a method from a dictionary, vim may forget the context entirely.
+If you ever need to extract a method from a dictionary and keep the context, use
+maktaba#function#Method.
+
+  :let g:namer = maktaba#function#Method(g:object, 'Name')
+  :echomsg g:namer.Apply()
+  ~ Mrs. Object
+
+Now you can pass methods around without losing their bound context.
+
+
+
+Another way to create funcdicts is from literal vimscript expressions. The
+simplest case is a function that returns the same constant value every time it's
+called:
+
+  :let g:constpi = maktaba#function#FromExpr('3.14159')
+  :echomsg string(2 * g:constpi.Apply())
+  ~ 6.28318
+
+Note these must be expressions, not commands.
+
+  :let g:settau = maktaba#function#FromExpr('let tau = 6.28318')
+  :call maktaba#error#Try(g:settau)
+  ~ *E121: Undefined variable: let (glob)
+
+The vimscript expression passed to #FromExpr can reference numbered arguments
+(a:1, a:2, etc).
+
+  :let g:circlearea = maktaba#function#FromExpr('a:1 * a:1 * 3.14159')
+  :echomsg string(g:circlearea.Apply(1))
+  ~ 3.14159
+  :echomsg string(g:circlearea.Apply(2))
+  ~ 12.56636
+
+Expression functions are especially useful as "closures" to bind local values in
+at definition time. You can pass initial arguments in via the optional [arglist]
+parameter.
+
+  :let g:radius3_cylinder_volume = maktaba#function#FromExpr(
+  | '3.14159 * a:1 * a:1 * a:2',
+  | [3])
+  :echomsg string(g:radius3_cylinder_volume.Apply(2))
+  ~ 56.54862
+
+You can also pass in a context dict to access it from the expression as self.
+
+  :let g:radius4_cylinder_volume = maktaba#function#FromExpr(
+  | '3.14159 * self.r * self.r * a:1',
+  | [],
+  | {'r': 4})
+  :echomsg string(g:radius4_cylinder_volume.Apply(2))
+  ~ 100.53088
+
+
+
+There are a few other utilities in maktaba#function that will be familiar to
+functional programming folks. We have function composition:
+
+  :function! SelfScale(value) abort
+  :  return a:value * a:value
+  :endfunction
+
+  :function! Double(value) abort
+  :  return a:value * 2
+  :endfunction
+
+  :echomsg maktaba#function#Compose('Double', 'SelfScale').Apply(3)
+  ~ 18
+
+The standard convention (last function is applied first) applies.
+
+
+
+And a version of map() that works with maktaba functions:
+
+  :function! Exponent(power, value) abort
+  :  return float2nr(pow(a:value, a:power))
+  :endfunction
+  :let g:SelfScale = maktaba#function#WithArgs('Exponent', 2)
+
+  :echomsg string(maktaba#function#Map([1, 2, 3], g:SelfScale))
+  ~ [1, 4, 9]
+
+Note that this version of map returns a NEW LIST, in contrast to the builtin
+map() (which filters the list in-place).
+
+
+
+And a version of filter() that works with maktaba functions:
+
+  :function! Exceeds(min, value) abort
+  :  return a:value > a:min
+  :endfunction
+  :let g:Exceeds7 = maktaba#function#WithArgs('Exceeds', 7)
+
+  :echomsg string(maktaba#function#Filter([1, 11, 2, 22, 3, 33], g:Exceeds7))
+  ~ [11, 22, 33]
+
+Note that this version of filter returns a NEW LIST, in contrast to the builtin
+filter() (which filters the list in-place).
+
+
+And a version of sort() that works with maktaba functions:
+
+  :function! Descending(x, y) abort
+  :  return a:x == a:y ? 0 : a:x >= a:y ? -1 : 1
+  :endfunction
+  :echomsg string(maktaba#function#Sorted([1, 17, 3, 9.5], 'Descending'))
+  ~ [17, 9.5, 3, 1]
+
+Note that this version of sort returns a NEW LIST, in contrast with the builtin
+sort() (which sorts the list in-place). To get in-place sorting, you can use the
+maktaba#function#Sort function.
+
+  :let g:mylist = [1, 10, 100, 1000]
+  :call maktaba#function#Sort(g:mylist, 'Descending')
+  :echomsg string(g:mylist)
+  ~ [1000, 100, 10, 1]
+
+
+
+We also provide two useful list-manipulation functions not built into vim.
+
+For example, here's a ridiculously inefficient way to calculate the sum of the
+lengths of strings in a list:
+
+  :function! AddLen(value, str) abort
+  :  return len(a:str) + a:value
+  :endfunction
+
+  :echomsg maktaba#function#Reduce(['a', 'aa', 'aaa', 'aaaa'], 0, 'AddLen')
+  ~ 10
+
+For simple reductions, it's often convenient to use the first value of the list
+as the initial value. For that case, use #Reduce1.
+
+  :function! Add(x, y) abort
+  :  return a:x + a:y
+  :endfunction
+
+  :echomsg maktaba#function#Reduce1([1, 2, 3, 4, 5], 'Add')
+  ~ 15
+
+Note that the list must be nonempty.
+
+
+
+With filter, map, and reduce you can rule the world -- though not necessarily
+efficiently. Please keep in mind that vimscript was not built to support
+closures, and you should avoid them where possible.
+
+They are particularly useful in places where you want to pass a callback
+function with some context attached.

@@ -1,0 +1,122 @@
+This test file puts glaive numbers through their paces. See glaive.vroom for an
+introduction to glaive syntax.
+
+Install glaive:
+
+  :set nocompatible
+  :let g:glaivedir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:glaivedir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Install a plugin:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+Define a numeric flag:
+
+  :call g:plugin.Flag('num', 0)
+  :call maktaba#ensure#IsNumber(g:plugin.Flag('num'))
+
+Utility function:
+
+  :function! Is(value) abort
+  :  call maktaba#ensure#IsEqual(g:plugin.Flag('num'), a:value)
+  :endfunction
+
+Number assignment works as you might expect:
+
+  :Glaive fullplugin num=1
+  :call Is(1)
+
+  :Glaive fullplugin num=0
+  :call Is(0)
+
+Negative numbers work:
+
+  :Glaive fullplugin num=-100034
+  :call Is(-100034)
+
+You can evaluate numeric expressions in backticks:
+
+  :Glaive fullplugin num=`1*2*3*4*5*6*7*8`
+
+Fun fact: When asked to estimate the above product within five seconds, people
+come up with siginficantly lower answers than when they're asked to estimate
+8*7*6*5*4*3*2*1 in five seconds.
+
+  :call Is(40320)
+
+Human brains are weird.
+
+If you set a flag without giving it a value, it will be set to 1.
+
+  :Glaive fullplugin num
+  :call Is(1)
+
+If you bang a numeric flag, it will be set to zero.
+
+  :Glaive fullplugin !num
+  :call Is(0)
+
+The tilda can be used to invert the flag.
+
+  :Glaive fullplugin num=10
+
+  :Glaive fullplugin ~num
+  :call Is(0)
+
+  :Glaive fullplugin ~num
+  :call Is(1)
+
+If the flag is 0, inverting it sets it to 1. Otherwise, inversion sets it to 0.
+
+You can add to and subtract from numeric flags.
+
+  :Glaive fullplugin num+=8
+  :call Is(9)
+
+  :Glaive fullplugin num-=11
+  :call Is(-2)
+
+This syntax is pathological, but works:
+
+  :Glaive fullplugin num-=-3
+  :call Is(1)
+
+You can add floats to ints, but the result is a float.
+
+  :Glaive fullplugin num+=5.28
+  :call maktaba#ensure#IsEqual(g:plugin.Flag('num'), 6.28)
+
+Note that this has changed the type of the num flag. Glaive DOES NOT enforce the
+type of your flag. Let's change num back to an integral:
+
+  :Glaive fullplugin num=8
+
+Callbacks work as expected:
+
+  :function! AddThree(val) abort
+  :  return a:val + 3
+  :endfunction
+  :Glaive fullplugin num`=AddThree
+  :call Is(11)
+
+Other syntax is invalid:
+
+  :Glaive fullplugin num+=foo
+  ~ ERROR(WrongType): Could not set num+=foo in fullplugin.
+  | Expected a number or float. Got a string.
+  :Glaive fullplugin num^=3
+  ~ ERROR(WrongType): Could not set num^=3 in fullplugin.
+  | Expected a string or list. Got a number.
+  :Glaive fullplugin num$=4
+  ~ ERROR(WrongType): Could not set num$=4 in fullplugin.
+  | Expected a string or list. Got a number.
+
+Note that the error messages pinpoint the exact source of the problem.
+
+  :Glaive fullplugin num=3 num+=foo !num
+  ~ ERROR(WrongType): Could not set num+=foo in fullplugin.
+  | Expected a number or float. Got a string.

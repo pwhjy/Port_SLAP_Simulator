@@ -1,0 +1,56 @@
+This is a vroom file. It's executable documentation. Or you can think of it as
+very well-documented tests. See helloworld.vroom for a more thorough
+explanation.
+
+The helloworld plugin can be configured using maktaba flags. It defines one
+'name' flag, and also exposes some configurability to users via the standard
+maktaba 'plugin' flag. Let's install it and then get into the details.
+
+  :set nocompatible
+  :let g:helloworlddir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:helloworlddir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+This time, we're going to do a little configuration before finalizing the
+initialization. There's a 'plugin' flag that allows the user to disable
+commands.
+
+  :let g:helloworld = maktaba#plugin#Get('helloworld')
+  :call g:helloworld.Flag('plugin[commands]', 0)
+
+Normal users should use Glaive or a plugin manager implementing the
+maktaba#setting API to configure flags.
+
+Disabling plugin[commands] prevents the corresponding file (plugin/commands.vim)
+from loading during the normal plugin files phase after vimrc is done executing,
+which means the commands won't be defined.
+
+  :call maktaba#LateLoad()
+
+  :Hello
+  ~ E492: Not an editor command: Hello
+  :Goodbye
+  ~ E492: Not an editor command: Goodbye
+
+Any file in the plugin/ directory should have the standard maktaba#plugin#Enter
+boilerplate and therefore should be possible to disable. Other common files are
+settings.vim, autocmds.vim, and mappings.vim (which is disabled by default).
+
+Even if maktaba is instructed to explicitly load the file, it will respect the
+flag.
+
+  :call g:helloworld.Load('commands')
+
+  :Hello
+  ~ E492: Not an editor command: Hello
+  :Goodbye
+  ~ E492: Not an editor command: Goodbye
+
+You can change your mind and enable commands after the fact. Maktaba will load
+them if they're enabled late.
+
+  :call g:helloworld.Flag('plugin[commands]', 1)
+  :call g:helloworld.Load('commands')
+
+  :Hello
+  ~ Hello, world!

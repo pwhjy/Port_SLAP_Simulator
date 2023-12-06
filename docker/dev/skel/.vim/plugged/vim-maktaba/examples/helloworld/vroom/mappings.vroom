@@ -1,0 +1,42 @@
+This is a vroom file. It's executable documentation. Or you can think of it as
+very well-documented tests. See helloworld.vroom for a more thorough
+explanation.
+
+The helloworld plugin defines a few key mappings. These let you use quick
+keystrokes instead of typing out commands to trigger certain actions. Let's
+install helloworld and then get into the details.
+
+  :set nocompatible
+  :let g:helloworlddir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:helloworlddir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+  :call maktaba#LateLoad()
+
+Plugins should never configure mappings by default, without explicit user
+opt-in, and helloworld is no exception. Its default mappings, "<Leader>Hh" and
+"<Leader>Hg", aren't defined yet.
+
+  :nmap <Leader>H
+  ~ No mapping found
+
+To fix that and get default mappings, just enable the plugin[mappings] flag.
+
+  :let g:helloworld = maktaba#plugin#Get('helloworld')
+  :call g:helloworld.Flag('plugin[mappings]', 1)
+
+In this case mappings.vim must be explicitly loaded so it can pick up the
+newly-enabled plugin[mappings] flag.
+
+  :call g:helloworld.Load('mappings')
+
+Now the mappings are available to use.
+
+  :execute 'norm' '<Leader>Hh'
+  ~ Hello, world!
+
+  :execute 'norm' '<Leader>Hg'
+  ~ Goodbye, world!
+
+Users can also use plugin[mappings] to configure a custom mappings prefix if
+they don't want "<Leader>H". See custom_mappings.vroom for details.

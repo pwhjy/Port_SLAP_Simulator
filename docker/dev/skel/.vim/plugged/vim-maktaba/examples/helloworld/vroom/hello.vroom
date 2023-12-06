@@ -1,0 +1,41 @@
+This is a vroom file. It's executable documentation. Or you can think of it as
+very well-documented tests. See helloworld.vroom for a more thorough
+explanation.
+
+The helloworld plugin has the humble goal of printing greeting messages to the
+screen. Let's install it and then get into the details.
+
+  :set nocompatible
+  :let g:helloworlddir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:helloworlddir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+  :call maktaba#LateLoad()
+
+helloworld defines a :Hello command to print greetings. By default, it greets
+the whole world.
+
+  :Hello
+  ~ Hello, world!
+
+This default is controlled by the 'name' flag. You can change the default value.
+
+  :let g:helloworld = maktaba#plugin#Get('helloworld')
+  :call g:helloworld.Flag('name', 'universe')
+
+  :Hello
+  ~ Hello, universe!
+
+You can also explicitly specify someone in particular to greet.
+
+  :Hello Mom
+  ~ Hello, Mom!
+
+The flag is expected to have a string value. The type is checked inside the
+implementation of :Hello, so a WrongType error will be shouted for anything
+that's not a string.
+
+  :call g:helloworld.Flag('name', 123)
+
+  :Hello
+  ~ ERROR(WrongType): Expected a string. Got a number.

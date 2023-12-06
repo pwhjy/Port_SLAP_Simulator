@@ -1,0 +1,287 @@
+Maktaba has conventions for dealing with vimscript exceptions. Before we dive
+in, let's get Maktaba installed:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Now, a brief aside on vimscript exceptions. Vimscript exceptions are strings,
+and they can only be caught with regular expressions. Unfortunately, these
+regular expressions must written out at the site of the :catch. This is
+vulnerable to typos, but there's no way around it.
+
+Vim itself has an error message convention: It uses error codes like E127 for
+different types of errors. Maktaba's convention is a little less opaque: Maktaba
+errors are of the form ERROR(Type).
+
+For example:
+
+  :try
+  :  throw maktaba#error#Message('Type', 'message')
+  :catch /ERROR(Type):/
+  :  " Handle the error here
+  :endtry
+
+I'll give you a more noteworthy example, but there's two notes on syntax first.
+
+1. These tests are run by sending remote commands to a vim 'server'. Due to vim
+limitations, :catch clauses won't fire unless they're sent in the same line as
+the :throw. It sucks, but we haven't found a way around it yet. For this reason,
+the catch command is in a line continuation instead of its own line.
+
+2. Vim executes catch blocks as they are defined. It does not wait for the
+:endtry. As such, you'll see some output captured between :catch and :endtry
+statements.
+
+Here's an example that actually demonstrates catching and handling a maktaba
+error:
+
+  :try
+  :  throw maktaba#error#NotFound('Threepio') |
+  |catch /ERROR(NotFound):/
+  :  echomsg 'Where could he be?'
+  ~ Where could he be?
+  :endtry
+
+Maktaba provides methods for making consistent exception strings. It does not
+actually throw exceptions: it merely helps you create strings that match the
+maktaba error format. The result of a maktaba#error#NotFound call is just
+a string.
+
+  :echomsg maktaba#error#NotFound('Threepio!')
+  ~ ERROR(NotFound): Threepio!
+
+The user is still in charge of throwing these strings.
+
+Maktaba provides a number of common error types, including:
+
+  :echomsg maktaba#error#NotAuthorized('User lacks priviledges for action.')
+  ~ ERROR(NotAuthorized): User lacks priviledges for action.
+  :echomsg maktaba#error#NotFound('Requested resource missing.')
+  ~ ERROR(NotFound): Requested resource missing.
+  :echomsg maktaba#error#WrongType('Variable does not have expected type.')
+  ~ ERROR(WrongType): Variable does not have expected type.
+  :echomsg maktaba#error#BadValue('Variable has an improper value.')
+  ~ ERROR(BadValue): Variable has an improper value.
+  :echomsg maktaba#error#InvalidArguments('Wrong number of function arguments.')
+  ~ ERROR(InvalidArguments): Wrong number of function arguments.
+  :echomsg maktaba#error#MissingFeature("User's vim version is too old.")
+  ~ ERROR(MissingFeature): User's vim version is too old.
+
+Furthermore, all maktaba errors can be formatted like vim's printf():
+
+  :echomsg maktaba#error#BadValue('Tried to divide %d by 0.', 10)
+  ~ ERROR(BadValue): Tried to divide 10 by 0.
+
+
+
+Remember that the catch command takes regexes. You can catch multiple errors at
+once like this:
+
+  :try
+  :  throw maktaba#error#BadValue('List should not be empty.') |
+  |catch /ERROR(\(BadValue\|WrongType\)):/
+  :  echomsg 'Caught you!'
+  ~ Caught you!
+  :endtry
+
+
+
+These error types are by no means inclusive. You've already seen that you can
+easily construct errors of your own type using maktaba#error#Message
+
+  :echomsg maktaba#error#Message('ConstraintFailure', '%s is loose', 'Skynet')
+  ~ ERROR(ConstraintFailure): Skynet is loose
+
+This is convenient for one-off error types. There's another utility function
+called maktaba#error#Exception that makes it easier to define your own exception
+functions, as follows:
+
+  :function! ConstraintFailure(message, ...) abort
+  :  return maktaba#error#Exception('ConstraintFailure', a:message, a:000)
+  :endfunction
+
+It's exactly the same as maktaba#error#Message, except that it takes its format
+arguments as a list instead of in varargs format. This saves you the work of
+piping varargs around.
+
+  :echomsg ConstraintFailure('%s is awake.', 'Wintermute')
+  ~ ERROR(ConstraintFailure): Wintermute is awake.
+
+
+
+Sometimes it is necessary to deconstruct an error message into the type and the
+message. This is especially useful when you want to catch an error, attach
+additional context, and re-throw it. Note that it's usually preferable to wrap
+errors, but sometimes destructuring an exception can really clean up your
+messages. maktaba#error#Split is there when you need it.
+
+  :echomsg string(maktaba#error#Split(maktaba#error#BadValue('Hi there!')))
+  ~ ['BadValue', 'Hi there!']
+
+This can also be used on vim errors.
+
+  :echomsg string(maktaba#error#Split('E118: Too many arguments.'))
+  ~ [118, 'Too many arguments.']
+
+
+
+It's worth noting that you should never let an exception propagate up to the
+user. If you do, the user will see 'Exception not caught' errors, and sometimes
+even an ugly stack trace:
+
+  :throw maktaba#error#NotFound('My keys')
+  ~ Error detected while processing * (glob)
+  ~ E605: Exception not caught: ERROR(NotFound): My keys
+
+Ugly. Please don't expose your users to these things! If you want to display an
+error message to the user, you should use one of maktaba#error#Warn or
+maktaba#error#Shout. The former is for warnings (in most color themes it will
+show up as red text), the latter is for errors (in most themes it will show up
+as white text on a red background). Except for their highlight groups
+(WarningMsg and ErrorMsg), these functions are identical:
+
+  :let g:errormsg = maktaba#error#NotFound("The droids we're looking for.")
+
+  :call maktaba#error#Warn(g:errormsg)
+  ~ ERROR(NotFound): The droids we're looking for.
+
+  :call maktaba#error#Shout(g:errormsg)
+  ~ ERROR(NotFound): The droids we're looking for.
+
+
+
+Finally, maktaba provides a utility to execute a function in try..catch context
+and shout the results. This is useful whenever you have a function that has
+expected failure modes which should be propagated to user-level (without an ugly
+stack trace).
+
+As an example, here's a function that ensures its variable is a non-empty list
+or dict:
+
+  :function! IsNonEmptyIterable(value) abort
+  :  call maktaba#ensure#IsCollection(a:value)
+  :  if empty(a:value)
+  :    throw maktaba#error#BadValue('Empty lists/dicts not allowed.')
+  :  endif
+  :  return a:value
+  :endfunction
+
+We can run this function using maktaba#error#Try as follows:
+
+  @messages (STRICT)
+
+  :let g:haselems = maktaba#function#Create('IsNonEmptyIterable')
+  :call maktaba#error#Try(g:haselems.WithArgs([]), ['WrongType', 'BadValue'])
+  ~ ERROR(BadValue): Empty lists/dicts not allowed.
+
+  :call maktaba#error#Try(g:haselems.WithArgs(0), ['WrongType', 'BadValue'])
+  ~ ERROR(WrongType): Expected a list or dictionary. Got a number.
+
+  @messages
+
+Notice how maktaba printed an error message, but did not throw the exception.
+(Otherwise vim would have barfed up a big ugly stack trace.)
+Use this function when you want to expose certain failure messages to the user
+without exposing them to vimscript junk.
+
+Notice that only the specified errors will be caught:
+
+  :try
+  :  call maktaba#error#Try(g:haselems.WithArgs([]), ['WrongType']) |
+  |catch /ERROR(BadValue):/
+  :  echomsg 'Value error thrown.'
+  ~ Value error thrown.
+  :endtry
+
+You can also use maktaba#error#Try on vim error codes.
+
+  :call maktaba#error#Try(g:haselems, [119])
+  ~ Vim(*):E119: Not enough arguments for function: IsNonEmptyIterable (glob)
+
+If listing the specific error types/codes that may fail is too restrictive for
+you, you can pass a regular expression directly to maktaba#error#Try.
+
+This regex catches the value error:
+
+  :call maktaba#error#Try(g:haselems.WithArgs([]), 'Empty .* not allowed.')
+  ~ ERROR(BadValue): Empty lists/dicts not allowed.
+
+But not the type error:
+
+  :try
+  :  call maktaba#error#Try(g:haselems.WithArgs(0), 'Empty .* not allowed.') |
+  |catch /ERROR(WrongType):/
+  :  echomsg 'Error passed through.'
+  ~ Error passed through.
+  :endtry
+
+You should use regexes sparingly; it's usually sufficient to specify a list of
+error types and error codes that you're expecting. Note that error types and
+error codes may be mixed and matched.
+
+  :call maktaba#error#Try(g:haselems.WithArgs([]), ['BadValue', 119])
+  ~ ERROR(BadValue): Empty lists/dicts not allowed.
+  :call maktaba#error#Try('IsNonEmptyIterable', ['BadValue', 119])
+  ~ Vim(*):E119: Not enough arguments for function: IsNonEmptyIterable (glob)
+
+If you're feeling cavalier, you can use '.*' to catch all exceptions:
+
+  :call maktaba#error#Try('IsNonEmptyIterable', '.*')
+  ~ Vim(*):E119: Not enough arguments for function: IsNonEmptyIterable (glob)
+
+Or you can omit the exceptions parameter entirely, in which case all errors will
+be caught.
+
+  :call maktaba#error#Try(g:haselems.WithArgs([]))
+  ~ ERROR(BadValue): Empty lists/dicts not allowed.
+
+The result of the function is returned upon success:
+
+  :echomsg string(maktaba#error#Try(g:haselems.WithArgs([1, 2, 3])))
+  ~ [1, 2, 3]
+
+By default, maktaba#error#Try returns 0 upon failure:
+
+  :let g:result = maktaba#error#Try(g:haselems.WithArgs([]))
+  ~ ERROR(BadValue): Empty lists/dicts not allowed.
+  :call maktaba#ensure#IsEqual(g:result, 0)
+  :unlet g:result
+
+But it supports an extra argument to specify a different default value.
+
+  :let g:result = maktaba#error#Try(g:haselems.WithArgs([]), ['BadValue'], [0])
+  ~ ERROR(BadValue): Empty lists/dicts not allowed.
+  :call maktaba#ensure#IsEqual(g:result, [0])
+
+
+
+
+There is also a version of maktaba#error#Try that evaluates command strings
+instead of calling functions. It is called maktaba#error#TryCommand. You can see
+it in action here:
+
+  :call maktaba#error#TryCommand('call IsNonEmptyIterable([])')
+  ~ ERROR(BadValue): Empty lists/dicts not allowed.
+
+  :let g:cmd = 'call IsNonEmptyIterable("string")'
+  :call maktaba#error#TryCommand(g:cmd, ['WrongType'])
+  ~ ERROR(WrongType): Expected a list or dictionary. Got a string.
+
+As in maktaba#error#Try, the first parameter to the function determines which
+types of errors will be displayed nicely and which will be propagated.
+
+  :try
+  :  call maktaba#error#TryCommand('call IsNonEmptyIterable(0)', ['BadValue']) |
+  |catch /ERROR(WrongType):/
+  :  echomsg 'Value error thrown.'
+  ~ Value error thrown.
+  :endtry
+
+And of course, if the command succeeds then no error messages are thrown or
+printed.
+
+  :let g:echocmd = 'echomsg string(IsNonEmptyIterable([1, 2, 3]))'
+  :call maktaba#error#TryCommand(g:echocmd)
+  ~ [1, 2, 3]

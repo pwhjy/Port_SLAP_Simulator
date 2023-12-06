@@ -1,0 +1,184 @@
+Vim's plugin loading model is somewhat insane. Maktaba plugins help you deal
+with that.
+
+Here's what you need to know:
+
+* Vim files should live in special subdirectories within your plugin.
+* Functions go in autoload/, you must follow vim's naming conventions there.
+* ftdetect, ftplugin, indent, and syntax files go in appropriate directories.
+* Most other files go in the plugin/ dir, split according to functionality.
+* Some very special files go in the instant/ dir.
+
+The standard maktaba plugin file split is:
+
+|  instant/
+|    flags.vim
+|  plugin/
+|    settings.vim
+|    commands.vim
+|    autocmds.vim
+|    mappings.vim
+
+Normal plugin files (in the plugin/ directory) are sourced  by vim after vimrc
+time, as the last part of the vim startup sequence. plugin/mappings.vim is
+opt-in, see mappings.vroom for details. All other plugin/ files are sourced
+normally by vim after vimrc time.
+
+Files in the instant/ directory are instantloaded, and are sourced immediately
+upon plugin installation. This feature can be dangerous, and should be used
+sparingly. Make sure you understand the nuances of vim plugin loading before
+adding strange instant/ files.
+
+The exception is instant/flags.vim, which is where you define your plugin
+configuration flags. See flags.vroom for details.
+
+The benefit of splitting your files up is that users can mix-and-match what they
+take from your plugin. In order to enable all this functionality, there's one
+rule: you need to have the following header at the top of all your plugin files:
+
+01 let [s:plugin, s:enter] = maktaba#plugin#Enter(expand('<sfile>:p'))
+02 if !s:enter
+03   finish
+04 endif
+
+This code does two things. First, it gives you a handle to the current plugin
+object. That lets you access all your plugin's configuration objects (without
+resorting to global settings), it serves as a good place to put data (without
+clobbering the global namespace), and it has some more neat functionality (see
+pluginutils.vroom).
+
+Secondly, the above code prevents your file from being sourced when it shouldn't
+be sourced. Vim's plugin model is prone to accidentally sourcing plugin files
+twice, which is why the vim helpfiles recommend setting a global variable
+to prevent re-entry (see :help write-plugin). Maktaba takes care of all this for
+you, and deploys machinery that allows the user to selectively disable different
+parts of your plugin  -- as we'll see below.
+
+All you need to do is start your plugin files with the above four lines, and
+everything will work like magic. But enough promises: let's see it in action.
+
+Before we can do anything, I need to install maktaba. In the meantime, we're
+going to be using the 'modularplugin' in the 'fakeplugins' directory: you might
+want to take this opportunity to browse through it.
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Now that maktaba is installed, let's get the modularplugin installed:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:repo = maktaba#path#Join([g:thisdir, 'fakeplugins'])
+  :let g:path = maktaba#path#Join([g:repo, 'modularplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+  ~ The flags file is sourced immediately.
+
+Note that the flags file was sourced immediately. Other plugin files won't be
+loaded until we call the Load function: unless we selectively load existing
+plugin files. For example, let's load the plugin settings before anything else:
+
+  :call g:plugin.Load('settings')
+  ~ Settings have been set.
+
+Notice that maktaba makes sure the file is not re-entered, no matter how we try
+to re-source it:
+
+  @messages (STRICT)
+  :call g:plugin.Load('settings')
+  :execute 'source' maktaba#path#Join([g:path, 'plugin', 'settings.vim'])
+  @messages
+
+This plugin has an 'optin.vim' plugin file which is disabled by default. It will
+not be entered when loaded:
+
+  @messages (STRICT)
+  :call g:plugin.Load('optin')
+  @messages
+
+We can, however, explicitly opt-in to using the optin file, by manipulating the
+special 'plugin' flag.
+
+  :call g:plugin.Flag('plugin[optin]', 1)
+
+This is a dictionary flag that controls which plugin files are loaded and which
+are ignored. Now that we've set plugin[optin] to on, maktaba will allow the
+'optin' file to be entered:
+
+  :call g:plugin.Load('optin')
+  ~ Finally!
+
+We can also use this to opt out of parts of the plugin that are sourced by
+default:
+
+  :call g:plugin.Flag('plugin[autocmds]', 0)
+
+Now we won't get the plugin's autocmds when the plugin finishes loading.
+
+Normally, the Load function throws errors when the requested file does not
+exist:
+
+  :let g:load = maktaba#function#Method(g:plugin, 'Load')
+  :call maktaba#error#Try(g:load.WithArgs('missing'))
+  ~ ERROR(NotFound): Cannot source plugin/missing in modularplugin.
+  | File does not exist.
+
+But you can pass the [optional] flag to make the function a little more lax:
+
+  :call g:plugin.Load('missing', 1)
+
+Let's finish loading the plugin now:
+  
+  @messages (STRICT)
+  :call g:plugin.Load()
+  ~ Defining commands...
+  @messages
+
+Notice that neither autocmds (which we turned off) nor mappings (which are
+disabled by default) were sourced.
+
+
+
+Let's examine those special flags in a bit more depth. There are two special
+flags in maktaba: 'plugin' and 'instant'. These correspond to the plugin/ and
+instant/ plugin directories.
+
+If your plugin has these directories (as ours does) then it will have the
+corresponding flags:
+
+  :echomsg g:plugin.HasFlag('plugin') && g:plugin.HasFlag('instant')
+  ~ 1
+
+However, if your plugin does not have these directories, it will not have these
+flags:
+
+  :let g:libpath = maktaba#path#Join([g:repo, 'library'])
+  :let g:library = maktaba#plugin#Install(g:libpath)
+  :echomsg g:library.HasFlag('instant') || g:library.HasFlag('plugin')
+  ~ 0
+
+As seen above, you can use the 'plugin' flag to prevent certain parts of
+a plugin from loading. This works great for flags in the plugin/ directory. It's
+quite a bit more difficult to disable files in the instant/ directory, as these
+are sourced immediately when the plugin is installed:
+
+To demonstrate, we will load a few test plugins. You may want to peruse the
+'fakeplugins' directory to get an idea of what these plugins do.
+
+  :let g:poisonpath = maktaba#path#Join([g:repo, 'poison'])
+  :call maktaba#plugin#Install(g:poisonpath)
+  ~ You are dead.
+
+It is, however, possible to prevent instant/ files from being loaded. To do so,
+you must manually make maktaba setting objects that specify what you wish to
+happen:
+
+  :let g:settings = maktaba#setting#ParseAll('!instant[bomb]')
+
+and pass those settings to maktaba#plugin#Install:
+
+  :let g:bombpath = maktaba#path#Join([g:repo, 'bomber'])
+  :let g:bomber = maktaba#plugin#Install(g:bombpath, g:settings)
+
+The exception is instant/flags.vim, which cannot be turned off no matter how
+hard you try.

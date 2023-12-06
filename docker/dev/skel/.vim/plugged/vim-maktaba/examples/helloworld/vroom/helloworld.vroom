@@ -1,0 +1,53 @@
+This is a vroom file. It's executable documentation. Or you can think of it as
+very well-documented tests. All lines indented by two spaces have special
+meaning and will be used to control vroom's behavior, in addition to providing a
+demonstration of how the helloworld plugin works. Everything else is freeform
+text (similar to comments) intended as explanation for someone reading through
+the vroom file. It can be executed using the vroom executable like
+"vroom helloworld/vroom/helloworld.vroom", or "vroom --crawl helloworld" to
+start a vim instance and replay all the commands and verify the expected output,
+and ensure there are no unexpected errors.
+
+It's good practice for every plugin to include vroom tests. This one documents
+and tests the helloworld plugin. It's a simple plugin intended to demonstrate
+basic plugin structure and best practices. It allows users to issue greetings
+and farewells (printed to the screen inside vim).
+
+Before getting into the details of how the plugin works, I'll install it using
+the standard bootstrap.vim file.
+
+  :set nocompatible
+  :let g:helloworlddir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:helloworlddir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+The bootstrap.vim file calls maktaba#plugin#GetOrInstall to install the
+helloworld plugin. The plugin can also be installed directly in other code, or
+by a plugin manager that implements the maktaba plugin installer API.
+These are built on top of maktaba#plugin#Install or maktaba#plugin#GetOrInstall.
+
+Normally, that will all happen at vimrc time, and after your vimrc file is
+loaded, the plugin files like plugin/commands.vim will be loaded before you need
+to use them. In this case, though, we're loading the plugin late, and it won't
+have had a chance to set everything up. In odd cases like this, you can force
+all plugin files to load using maktaba#LateLoad.
+
+  :call maktaba#LateLoad()
+
+This plugin is designed to issue greetings, so... Let's issue a greeting!
+
+  :Hello
+  ~ Hello, world!
+
+Working as advertised. If you like, you can also issue a greeting to someone in
+particular.
+
+  :Hello Dear Reader
+  ~ Hello, Dear Reader!
+
+After saying "Hello", you can also say "Goodbye".
+
+  :Goodbye
+  ~ Goodbye, Dear Reader!
+
+It even remembers who we greeted last time. Spiffy!

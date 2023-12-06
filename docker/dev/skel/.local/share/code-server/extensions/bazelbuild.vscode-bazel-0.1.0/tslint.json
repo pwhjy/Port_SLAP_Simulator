@@ -1,0 +1,17 @@
+{
+    "defaultSeverity": "error",
+    "extends": [
+        "tslint:recommended"
+    ],
+    "jsRules": {},
+    "rules": {
+        "max-line-length": [
+            true,
+            {
+                "limit": 80,
+                "ignore-pattern": "^import |^export {(.*?)}"
+            }
+        ]
+    },
+    "rulesDirectory": []
+}

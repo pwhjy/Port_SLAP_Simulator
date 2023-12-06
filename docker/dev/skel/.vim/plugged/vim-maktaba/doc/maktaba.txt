@@ -1,0 +1,2042 @@
+*maktaba.txt*	Consistent Vimscript
+Google                                                     *Maktaba* *maktaba*
+
+==============================================================================
+CONTENTS                                                    *maktaba-contents*
+  1. Introduction..............................................|maktaba-intro|
+  2. Version.................................................|maktaba-version|
+  3. Dictionaries..............................................|maktaba-dicts|
+  4. Functions.............................................|maktaba-functions|
+  5. Error Handling.......................................|maktaba-exceptions|
+  6. Python...................................................|maktaba-python|
+
+==============================================================================
+INTRODUCTION                                                   *maktaba-intro*
+
+A vimscript library that hides the worst parts of vimscript and helps you
+provide consistent plugins.
+
+Maktaba is a framework for writing well-behaved, easily-configurable plugins.
+It supplies conventions to keep plugins consistent, along with a number of
+tools and utilities for plugin authors.
+
+Maktaba introduces a concept of a |maktaba.Flag| for configuration, and
+recommends users install a configuration plugin like |Glaive|, or a plugin
+manager with configuration support, to manage plugin flags.
+
+Also included are a universal logging framework, error handling utilities, and
+a number of tools that make writing vimscript both safer and easier.
+
+==============================================================================
+VERSION                                                      *maktaba-version*
+
+Maktaba uses semantic versioning (see http://semver.org). A version string
+contains a major number, a minor number, and a patch number, dot-separated.
+
+The patch number will be bumped for patches, bug fixes, internal cleanup, and
+for any change that does not add or remove functions. New optional arguments
+may be added to functions by patches.
+
+The minor number will be bumped every time new functionality is added.
+Functionality may become deprecated when a minor number bumps. Deprecated
+functionality will remain available for at least two minor numbers. For at
+least one minor number, deprecation warnings will be documented and silently
+logged. For at least one minor number, deprecation warnings will be loud.
+
+Major number bumps indicate sweeping (often backwards-incompatible) changes.
+
+Use |maktaba#IsAtLeastVersion| to check whether this version of maktaba has
+passed a given version number.
+
+==============================================================================
+DICTIONARIES                                                   *maktaba-dicts*
+
+                                                                *maktaba.Enum*
+An enumeration object. It has fields for each name in the enumeration. Each
+name is attached to a unique value. Names are in all caps. Example:
+>
+  let g:animals = maktaba#enum#Create(['DUCK', 'PIG', 'COW'])
+  echomsg g:animals.PIG      " This will echo 1.
+  echomsg g:animals.COW      " This will echo 2
+  echomsg g:animals.Name(0)  " This will echo DUCK.
+  echomsg g:animals.Names()  " This will echo ['DUCK', 'PIG', 'COW'].
+<
+
+Enum.Name({value})                                               *Enum.Name()*
+  Gets the name associated with {value}.
+  Throws ERROR(NotFound) if no such name exists on the enum.
+
+Enum.Names()                                                    *Enum.Names()*
+  Gets all names on the enum, in value order.
+
+Enum.Value({name})                                              *Enum.Value()*
+  Gets the value of the enum at {name}.
+  Throws ERROR(NotFound) if no such name exists on the enum.
+  Throws ERROR(BadValue) if {name} is not a valid enum name.
+  Throws ERROR(WrongType) if {name} is not a string.
+
+Enum.Values()                                                  *Enum.Values()*
+  Gets all values on the enum, in order.
+
+                                                   *maktaba.ExtensionRegistry*
+A registry for the extensions used by a single plugin.  Extensions are
+dictionaries (usually with some function fields) with a plugin-specific
+interpretation.
+
+Plugins should use |Plugin.GetExtensionRegistry()| to gain access to their own
+extension registry, and |maktaba#extension#GetRegistry()| to gain access to an
+extension registry for another plugin.
+
+For example, a hypothetical code-formatting plugin would use the following to
+retrieve a list of extensions, where each extension represents a formatter for
+a particular filetype:
+>
+  let [s:plugin, s:enter] = maktaba#plugin#Enter(expand('<sfile>:p'))
+  ...
+  let l:registry = s:plugin.GetExtensionRegistry()
+  for l:extension in l:registry.GetExtensions()
+    if &filetype is# l:extension.filetype
+      call maktaba#function#Call(l:extension.FormatBuffer)
+      return
+    endif
+  endfor
+<
+Likewise, a plugin providing another formatter would use the following to
+register a new extension:
+>
+  let l:extension = {
+      \ 'filetype': 'python',
+      \ 'FormatBuffer': function('pyformatter#FormatUsingAutopep8'),
+      \ }
+  let l:codefmt_registry = maktaba#extension#GetRegistry('code-formatting')
+  call l:codefmt_registry.AddExtension(l:extension)
+<
+See the Vroom tests in the Maktaba source tree (pluginextensions.vroom) for
+more examples.
+
+ExtensionRegistry.AddExtension({extension}) *ExtensionRegistry.AddExtension()*
+  Adds the given {extension} to this extension registry.
+
+  The extension must be a dict.  If a validator is registered for this
+  extension registry, this function will call the validator.  Failures will
+  result in the validation error being shouted to the user (and the extension
+  will not be added).
+
+  Throws ERROR(WrongType) if {extension} is not a dict.
+
+ExtensionRegistry.GetExtensions()          *ExtensionRegistry.GetExtensions()*
+  Returns the extensions that have been added to this extension registry.
+
+  Extensions added by the plugin to its own registry are always returned after
+  those added by other plugins.  Otherwise, extensions are returned in the
+  opposite order to which they were added.
+
+  This function is only available to the plugin that the extension registry
+  belongs to.
+  Throws ERROR(NotImplemented) if called by another plugin.
+
+ExtensionRegistry.SetValidator({validator}) *ExtensionRegistry.SetValidator()*
+  Sets {validator} as the validator for this extension registry.
+
+  {validator} can be the name of a function, funcref, or Maktaba funcdict. It
+  should accept an arbitrary dict (the extension) and throw an error if the
+  extension if invalid.
+
+  This function will call the validator for any extensions that have already
+  been registered.  Failures will cause the extension to be removed, and the
+  error shouted to the user.
+
+  This function is only available to the plugin that the extension registry
+  belongs to.
+
+  Throws ERROR(WrongType) if {validator} is not a string, funcref, nor dict.
+  Throws ERROR(BadValue) if {validator} is a dict but does not appear to be a
+      funcdict.
+  Throws ERROR(NotImplemented) if called by another plugin.
+
+                                                                *maktaba.Flag*
+The maktaba flag object. Exposes functions that operate on an individual
+maktaba flag.
+
+Flag.Get([foci])                                                  *Flag.Get()*
+  Gets the value of the flag. You may give [foci] to focus on one particular
+  part of the flag. For example:
+>
+    s:plugin.flags.complex.Get(['key', 3])
+<
+  is equivalent to
+>
+    s:plugin.flags.complex.Get()['key'][3]
+<
+  with the difference that the former throws BadValue errors and the latter
+  throws E716.
+
+  Flag values are locked. If you need to do complex manipulation on a flag
+  value, you must copy it and commit the copied value using |Flag.Set|.
+  Throws ERROR(BadValue) if [foci] are invalid.
+  Throws ERROR(WrongType) if [foci] contains the wrong types to index the
+  flag.
+
+Flag.GetCopy([foci])                                          *Flag.GetCopy()*
+  Gets a deep copy of the value of the flag. You may give [foci] to focus on
+  one particular part of the flag. The following are equivalent:
+>
+    deepcopy(flag.Get())
+    flag.GetCopy()
+<
+  This function is convenient if you need to modify a flag, because flag
+  values are locked. Remember that if you change the copy the flag itself
+  won't change until you call |Flag.Set|.
+  Throws ERROR(BadValue) if [foci] are invalid.
+  Throws ERROR(WrongType) if [foci] contains the wrong types to index the
+  flag.
+
+Flag.Set({value}, [foci])                                         *Flag.Set()*
+  Sets the flag to {value}. If [foci] are given, they target a specific part
+  of a (complex) flag to be set. For example,
+>
+    call s:plugin.flags.complexflag.Set('leaf', ['a', 0, 'b'])
+<
+  will set value['a'][0]['b'] to 'leaf'.
+  Throws ERROR(BadValue) when an invalid focus is requested.
+  Throws ERROR(WrongType) if [foci] contains the wrong types to index the
+  flag.
+
+Flag.AddCallback({callback}, [fire_immediately])          *Flag.AddCallback()*
+  Registers {callback}. It must refer to a function. The function must take
+  one argument: the value of the flag. {callback} will (by default) be fired
+  immediately with the current value of the flag. It will be fired again every
+  time the flag changes.
+
+  Callbacks are fired AFTER translation occurs. Callbacks are fired in order
+  of their registration.
+
+  This function returns a function which, when applied, unregisters
+  {callback}. Hold on to it if you expect you'll need to remove {callback}.
+
+  If [fire_immediately] is zero, {callback} will only be fired when the
+  current value of the flag changes.
+  [fire_immediately] is 1 if omitted.
+  Throws ERROR(WrongType) if {callback} is not callable.
+  Throws ERROR(BadValue) if {callback} is not a funcdict.
+
+Flag.Callback()                                              *Flag.Callback()*
+  Fires all callbacks in order.
+
+Flag.AddTranslator({translator})                        *Flag.AddTranslator()*
+  Registers {translator}. {translator} must refer to a function that takes a
+  single argument (the value of the flag). {translator} must return a value
+  which will become the new value of the flag.
+
+  {translator} will be applied to the current value of the flag immediately,
+  and then all registered callbacks will be fired. Thereafter, translators
+  will be run every time the flag changes. Translators are fired in order of
+  their registration. Callbacks are fired AFTER translation occurs.
+
+  This function returns a function which, when called, unregisters
+  {translator}. Hold on to it if you expect you'll need to remove
+  {translator}.
+  Throws ERROR(WrongType) if {translator} is not callable.
+  Throws ERROR(BadValue) if {translator} is not a funcdict.
+
+Flag.Translate({value})                                     *Flag.Translate()*
+  Returns the value that the flag will have after being set to {value} (after
+  running {value} through all registered translators).
+
+                                                              *maktaba.Logger*
+Interface for a plugin to send log messages to maktaba.
+
+Logger.Debug({message}, [args...])                            *Logger.Debug()*
+  Logs a {message} with [args...] at DEBUG level.
+
+Logger.Info({message}, [args...])                              *Logger.Info()*
+  Logs a {message} with [args...] at INFO level.
+
+Logger.Warn({message}, [args...])                              *Logger.Warn()*
+  Logs a {message} with [args...] at WARN level.
+
+Logger.Error({message}, [args...])                            *Logger.Error()*
+  Logs a {message} with [args...] at ERROR level.
+
+Logger.Severe({message}, [args...])                          *Logger.Severe()*
+  Logs a {message} with [args...] at SEVERE level.
+
+                                                              *maktaba.Plugin*
+The maktaba plugin object. Exposes functions that operate on the plugin
+itself.
+
+Plugin.Load([file], [optional])                                *Plugin.Load()*
+  If [file] is given, the plugin file plugin/<file>.vim will be sourced. An
+  error will be thrown if [file] does not exist unless [optional] is set. If
+  [file] is omitted, then all plugin files that have not yet been sourced will
+  be sourced. [file] may also be a list of filenames to source.
+  [optional] is 0 if omitted.
+  Throws ERROR(NotFound) if [file] is given but is not found.
+
+Plugin.GenerateHelpTags()                          *Plugin.GenerateHelpTags()*
+  Generates help tags for the plugin. Returns 0 if there are no help tags.
+  Returns 1 if helptags are generated successfully.
+  Throws ERROR(Impossible) if help tags cannot be generated.
+
+Plugin.HasDir({dir})                                         *Plugin.HasDir()*
+  Tests whether the plugin has {dir}, either as a direct subdirectory or as a
+  subdirectory of the after/ directory. Cached for performance, so new paths
+  will not be discovered if they're added to the plugin after the first check.
+
+Plugin.HasFiletypeData()                            *Plugin.HasFiletypeData()*
+  Tests whether a plugin has a filetype-active directory (ftdetect, ftplugin,
+  indent, or syntax).
+
+Plugin.AddonInfo()                                        *Plugin.AddonInfo()*
+  Gets plugin metadata from plugin's addon-info.json file, if present.
+  Otherwise, returns an empty dict.
+  Throws ERROR(BadValue) if addon-info.json isn't valid JSON.
+
+Plugin.Flag({flag})                                            *Plugin.Flag()*
+  Returns the value of {flag}. See |maktaba#setting#Handle()| for {flag}
+  syntax.
+
+  The following are roughly equivalent:
+>
+    maktaba#plugin#Get('myplugin').Flag('foo')
+    maktaba#plugin#Get('myplugin').flags.foo.Get()
+<
+
+  You may access a portion of a flag (a specific value in a dict flag, or a
+  specific item in a list flag) using a fairly natural square bracket syntax:
+>
+    maktaba#plugin#Get('myplugin').Flag('plugin[autocmds]')
+<
+  This is equivalent to:
+>
+    maktaba#plugin#Get('myplugin').flags.plugin.Get()['autocmds']
+<
+  This syntax can be chained:
+>
+    maktaba#plugin#Get('myplugin').Flag('complex[key][0]')
+<
+
+  The plugin flags file will be sourced before determining if the flag exists.
+
+  Throws ERROR(BadValue) if {flag} is an invalid flag name.
+  Throws ERROR(NotFound) if {flag} does not exist.
+
+
+Plugin.Flag({flag}, {value})
+  Sets {flag} to {value}. See |maktaba#setting#Handle()| for {flag} syntax.
+
+  The following are equivalent (assuming the flag "foo" already exists):
+>
+    maktaba#plugin#Get('myplugin').Flag('foo', 'bar')
+    maktaba#plugin#Get('myplugin').flags.foo.Set('bar')
+<
+
+  Also supports dict flag syntax:
+>
+    maktaba#plugin#Get('myplugin').Flag('plugin[autocmds]', 1)
+<
+
+  Throws ERROR(BadValue) if {flag} is an invalid flag name.
+
+Plugin.MapPrefix({letter}, [throw])                       *Plugin.MapPrefix()*
+  Returns the user's desired map prefix for the plugin. If the user has not
+  specified a map prefix, <leader>{letter} will be returned.
+
+  If the user's map prefix is invalid, an error message will be PRINTED, not
+  thrown. This allows plugin authors to call this function without worrying
+  about barfing up a stack trace if the user config is bad. You can set the
+  [throw] argument to make this function throw errors instead of printing
+  them, if you plan to catch them explicitly.
+
+  Mappings should be defined in the plugin/mappings.vim file. The user
+  configures their map prefix preferences via the flag that controls that
+  file.
+  [throw] is 0 if omitted.
+  Throws ERROR(NotFound) if plugin/mappings.vim does not exist.
+  Throws ERROR(BadValue) if the map prefix is invalid and [throw] is set.
+  Throws ERROR(Unknown) if mappings have been disabled.
+
+Plugin.IsLibrary()                                        *Plugin.IsLibrary()*
+  Checks that this plugin is a library plugin. In order to be a library
+  plugin, the plugin must contain an autoload/ directory and must not contain
+  ftplugin/, ftdetect/, syntax/, indent/, plugin/, nor instant/ directories.
+
+Plugin.GetExtensionRegistry()                  *Plugin.GetExtensionRegistry()*
+  Returns the |maktaba.ExtensionRegistry| belonging to this plugin.
+
+  This should be used only by the plugin itself; external callers should use
+  |maktaba#extension#GetRegistry()| instead, rather than depend upon the
+  plugin directly.
+
+                                                            *maktaba.Selector*
+Representation of a set of data for a user to select from, e.g. list of files.
+It can be created with |maktaba#selector#Create()|, configured with syntax
+highlighting, key mappings, etc. and shown as a vim window.
+
+Selector.WithMappings({keymappings})                 *Selector.WithMappings()*
+  Set {keymappings} to use in the selector window. Must have the form:
+>
+    'keyToPress': [
+        ActionFunction({line}, [datum]),
+        'SelectorWindowAction',
+        'Help Text']
+<
+  Where the "ActionFunction" is the name of a function you specify, which
+  takes one or two arguments:
+    1. line: The contents of the line on which the "keyToPress" was pressed.
+    2. datum: data associated with the line when selector was created, if line
+      was initialized as a 2-item list.
+
+  And where the "SelectorWindowAction" must be one of the following:
+  "Close" -- close the SelectorWindow before completing the action
+  "Return" -- Return to previous window and keep the Selector Window open
+  "NoOp" -- Perform no action (keeping the SelectorWindow open).
+
+Selector.WithSyntax({ApplySyntax})                     *Selector.WithSyntax()*
+  Configures an {ApplySyntax} function to be called in the selector window.
+  This will by applied in addition to standard syntax rules for rendering the
+  help header, etc.
+
+Selector.WithExtraOptions({ApplyExtraOptions})   *Selector.WithExtraOptions()*
+  Configures {ApplyExtraOptions} for additional window-local settings for
+  selector window. If not configured, the default extra options just disable
+  'number'.
+
+Selector.WithName({name})                                *Selector.WithName()*
+  Configures {name} to show as the window name on the selector. If not
+  configured, the default name is "__SelectorWindow__".
+
+Selector.Show([minheight], [maxheight], [position])          *Selector.Show()*
+  Shows a selector window for the |maktaba.Selector| with [minheight],
+  [maxheight], and [position].
+  [minheight] is 5 if omitted.
+  [maxheight] is 25 if omitted.
+  [position] is 'botright' if omitted.
+
+Selector.ToggleHelp()                                  *Selector.ToggleHelp()*
+  Toggle whether verbose help is shown for the selector.
+
+                                                             *maktaba.Setting*
+Parses {text} into a setting object. The setting object can be applied to a
+plugin to affect the plugin flags as described in {text}. Setting syntax is as
+follows:
+
+A setting consists of four parts:
+  1. Optional unary operator
+  2. Flag handle
+  3. Optional binary operator (not valid with unary operator)
+  4. Flag value (must follow binary operator)
+
+Valid unary operators are ! and ~. The former sets flags to zero, the latter
+inverts integer flags (0 becomes 1, everything else becomes 0).
+
+Flag handles consist of a flag name and optionally a number of foci, see
+|maktaba#setting#Handle()| for details.
+
+Valid binary operators are = += -= ^= $= and `=.
+  * = sets a flag directly.
+  * += adds to numbers, appends to lists and strings, and extends
+    dictionaries.
+  * -= subtracts from numbers and removes from lists and dictionaries.
+  * ^= prepends to lists and strings.
+  * $= appends to lists and strings.
+  * `= sets a flag to the result of applying the function named by the value.
+
+Values are parsed as follows:
+  1. Values in single or double quotes are parsed as strings.
+  2. Anything in backticks is evaluated (double backticks escape a backtick).
+  3. A value containing only numeric characters is parsed as an integer.
+  4. Numeric values with one internal dot are parsed as floats (like 0.5).
+  5. Any simple string [a-zA-Z0-9_-] is parsed as a string.
+  6. A comma-separated series of simple strings & numbers is parsed as a list.
+  7. A comma-separated series of key:value pairs (simple strings & numbers) is
+    parsed as a dictionary.
+
+If no operator (unary or binary) is given, the setting will set that handle to
+1 when applied. If the '=' operator is used, but no value is given, the flag
+will be emptied (see |maktaba#value#EmptyValue()|).
+
+Setting.Apply({plugin})                                      *Setting.Apply()*
+  Applies the setting to {plugin}. Returns the new value of the affected flag,
+  for convenience.
+  Throws ERROR(NotFound) if {plugin} does not define the appropriate flag.
+  Throws ERROR(WrongType) if the flag is not of a type the setting requires.
+  Throws ERROR(BadValue) if the flag has a value inappropriate for the
+  setting.
+
+                                                             *maktaba.Syscall*
+A maktaba representation of a system call, which is used to configure and
+execute a system command.
+
+Syscall.WithCwd({directory})                               *Syscall.WithCwd()*
+  Returns a copy of the |maktaba.Syscall| configured to be executed in
+  {directory}.
+  Throws ERROR(WrongType)
+  Throws ERROR(NotFound) if {directory} is invalid.
+
+Syscall.WithStdin({input})                               *Syscall.WithStdin()*
+  Configures {input} to be passed via stdin to the command. Only supported for
+  |Syscall.Call()|. Calling |Syscall.CallForeground()| on a Syscall with stdin
+  specified will cause |ERROR(NotImplemented)| to be thrown.
+  Throws ERROR(WrongType)
+
+Syscall.And({cmd})                                             *Syscall.And()*
+  Returns a new |maktaba.Syscall| that chains self and {cmd} together with a
+  logical AND operation ("&&"). {cmd} may be any valid
+  |maktaba#syscall#Create()| argument.
+  Throws ERROR(WrongType)
+
+Syscall.Or({cmd})                                               *Syscall.Or()*
+  Returns a new |maktaba.Syscall| that chains self and {cmd} together with a
+  logical OR operation ("&&"). {cmd} may be any valid
+  |maktaba#syscall#Create()| argument.
+  Throws ERROR(WrongType)
+
+Syscall.Call([throw_errors])                                  *Syscall.Call()*
+  Executes the system call without showing output to the user. If
+  [throw_errors] is 1, any non-zero exit code from the command will cause a
+  ShellError to be thrown. Otherwise, the caller is responsible for checking
+  |v:shell_error| and handling error conditions.
+  [throw_errors] is 1 if omitted.
+  Returns a dictionary with the following fields:
+    * stdout: the shell command's entire stdout string, if available.
+    * stderr: the shell command's entire stderr string, if available.
+  Throws ERROR(WrongType)
+  Throws ERROR(ShellError) if the shell command returns a non-zero exit code.
+
+Syscall.CallAsync({callback}, {allow_sync_fallback})     *Syscall.CallAsync()*
+  Executes the system call asynchronously and invokes {callback} on
+  completion. If the current vim instance does not support async execution
+  (details below), setting {allow_sync_fallback} allows the system call to be
+  executed synchronously as a fallback instead of failing with an error.
+
+  Returns a |maktaba.SyscallInvocation| to interact with the invocation, check
+  status, etc.
+
+  {callback} function will be called with the SyscallInvocation as an
+  argument, as {callback}(SyscallInvocation), and the invocation provides
+  access to stdout, stderr and status (code). For example:
+>
+    function Handler(result) abort
+      if a:result.status != 0
+        call maktaba#error#Shout('sleep command failed: %s', a:result.stderr)
+        return
+      endif
+      echomsg 'Success!'
+    endfunction
+    call maktaba#syscall#Create(['sleep', '3']).CallAsync('Handler', 1)
+<
+  WARNING: The callback is responsible for checking SyscallInvocation.status
+  and handling unexpected exit codes. Otherwise all syscall failures are
+  silent.
+
+  NOTE: If {callback} depends on cursor location or other vim state, the
+  caller should capture parameters and bind them to the callback:
+>
+    function ReplaceLineHandler(env, result) abort
+      if a:result.status != 0
+        call maktaba#error#Shout('date call failed: %s', a:result.stderr)
+        return
+      endif
+      execute 'buffer' a:env.buffer
+      call maktaba#buffer#Overwrite(a:env.line, a:env.line, [a:result.stdout])
+    endfunction
+    let env = {'buffer': bufnr('%'), 'line': line('.')}
+    let callback = maktaba#function#Create('ReplaceLineHandler', [env])
+    call maktaba#syscall#Create(['date']).CallAsync(callback, 1, 0)
+<
+
+  As a legacy fallback, if the callback fails expecting more arguments, it
+  will be called with the arguments: {callback}(env_dict, SyscallInvocation),
+  where env_dict contains tab, buffer, path, column and line info. This
+  fallback will be deprecated and stop working in future versions of maktaba.
+
+  Asynchronous calls are executed via vim's |job| support. If the vim instance
+  is missing job support, this will try to fall back to legacy |clientserver|
+  invocation, which has a few preconditions of its own (see below). If neither
+  option is available, asynchronous calls are not possible, and the call will
+  either throw |ERROR(MissingFeature)| or fall back to synchronous calls,
+  depending on the {allow_sync_fallback} parameter.
+
+  The legacy fallback executes calls via |--remote-expr| using vim's
+  |clientserver| capabilities, so the preconditions for it are vim being
+  compiled with +clientserver and |v:servername| being set. Vim will try to
+  set it to something when it starts if it is running in X context, e.g.
+  'GVIM1'. Otherwise, the user needs to set it by passing |--servername| $NAME
+  to vim.
+  Throws ERROR(WrongType)
+  Throws ERROR(MissingFeature) if neither async execution nor fallback is
+  available.
+
+Syscall.CallForeground({pause}, [throw_errors])     *Syscall.CallForeground()*
+  Executes the system call in the foreground, showing the output to the user.
+  If {pause} is 1, output will stay on the screen until the user presses
+  Enter. If [throw_errors] is 1, any non-zero exit code from the command will
+  cause a ShellError to be thrown. Otherwise, the caller is responsible for
+  checking |v:shell_error| and handling error conditions.
+  [throw_errors] is 1 if omitted.
+  Returns a dictionary with the following fields:
+    * stdout: the shell command's entire stdout string, if available.
+    * stderr: the shell command's entire stderr string, if available.
+  Throws ERROR(WrongType)
+  Throws ERROR(ShellError) if the shell command returns a non-zero exit code.
+  Throws ERROR(NotImplemented) if stdin has been specified for this Syscall.
+
+Syscall.GetCommand()                                    *Syscall.GetCommand()*
+  Gets the literal command string that would be executed by |Syscall.Call()|
+  or |Syscall.CallForeground()|, with words joined and special characters
+  escaped.
+
+                                                   *maktaba.SyscallInvocation*
+A maktaba representation of a single invocation of a |maktaba.Syscall|.
+Provides a mechanism for interacting with a syscall invocation, checking
+status, etc.
+
+Public variables:
+  * syscall: The |maktaba.Syscall| that triggered this invocation.
+  * finished: 0 if the invocation is pending, 1 if finished. The result
+    variables (status, stdout, stderr) will not exist if the invocation is not
+    finished. Guaranteed to be 1 when an invocation's callback is called.
+  * status: the shell exit code from the invocation (typically 0 for success).
+  * stdout: the invocation's entire stdout string.
+  * stderr: the invocation's entire stderr string, if available.
+
+Note that one Syscall invoked multiple times would produce multiple
+independent SyscallInvocations.
+
+==============================================================================
+FUNCTIONS                                                  *maktaba-functions*
+
+maktaba#Maktaba()                                          *maktaba#Maktaba()*
+  Returns a handle to the maktaba plugin object.
+
+maktaba#IsAtLeastVersion({version})               *maktaba#IsAtLeastVersion()*
+  Use this function to query against the maktaba version. Returns true if the
+  maktaba version is at or past {version}. For example:
+>
+    maktaba#IsAtLeastVersion('1.0.3')
+<
+  There is no equivalent function for checking an upper bound. This is
+  designed to prevent unsatisfiable dependencies such as one plugin requiring
+  <2.0.0 and another requiring >=2.1.0. Enforcing a maximum version is
+  discouraged.
+  Throws ERROR(BadValue) if {version} is not a valid Maktaba version number.
+  Throws ERROR(WrongType)
+
+maktaba#LateLoad([cycle])                                 *maktaba#LateLoad()*
+  This function essentially mimics the vim plugin installation phase. All
+  plugins installed by maktaba that have not been sourced will be sourced.
+  This will also cycle filetypes (see |maktaba#filetype#Cycle()|) unless
+  [cycle] is set to 0.
+  [cycle] is 1 if omitted.
+
+maktaba#autocmd#ClearGroup({augroup})           *maktaba#autocmd#ClearGroup()*
+  Removes all autocmds in {augroup}, then removes {augroup}.
+
+maktaba#buffer#GetVisualSelection()      *maktaba#buffer#GetVisualSelection()*
+  Gets the text of the current or last visual selection. Useful for visual
+  mode mappings.
+
+maktaba#buffer#Overwrite({startline}, {endline}, {lines})
+                                                  *maktaba#buffer#Overwrite()*
+  Replace the lines from {startline} to {endline} in the current buffer with
+  {lines}. {startline} and {endline} are numbers. {endline} is inclusive
+  following vim's precedent. {lines} is a list of strings.
+
+  This is not a range function because range functions always move the cursor
+  (requiring the caller to manage the cursor explicitly to prevent it), which
+  is not good behavior for any library function.
+
+  Use with an empty list to delete a range of lines. Use |append()| to insert
+  lines instead of overwriting.
+  Throws ERROR(WrongType) if the arguments are invalid.
+  Throws ERROR(BadValue) if {startline} is greater than {endline}.
+
+maktaba#buffer#Substitute({pattern}, [replacement], [flags], [firstline],
+  [lastline], [usecase], [searchdelimiter])      *maktaba#buffer#Substitute()*
+  Performs a configuration-agnostic substitution in the current buffer. For
+  the duration of the substitution, 'gdefault' is on, 'ignorecase' is off, and
+  'smartcase' is off. These settings are restored after the substitution. The
+  e flag is inverted: errors will not be shown unless the e flag is present.
+  The cursor does not move. The range is the whole file by default.
+
+  {pattern} The pattern to replace. [replacement] The replacement string.
+  [flags] The search flags. See |:s_flags|. "e" and "g" are on by default.
+  [firstline] The first line of the replacement range.
+  [firstline] is 0 if omitted.
+  [lastline] The last line of the replacement range.
+  [lastline] is equal to line('$') if omitted.
+  [usecase] Whether to honor the user's case sensitivity settings.
+  [usecase] is 0 if omitted.
+  [searchdelimiter] The search delimiter to use. Must be accepted by |:s|.
+  [searchdelimiter] is '/' if omitted.
+
+maktaba#command#GetOutput({command})             *maktaba#command#GetOutput()*
+  Runs {command} silently, returns its output as a string.
+
+maktaba#compatibility#Disable()              *maktaba#compatibility#Disable()*
+  Turns vi-compatibility mode off and issues a warning if it was on. Plugins
+  which use maktaba should call this function after installing maktaba (or
+  'set nocompatible' by other means). Maktaba does not support vi
+  compatibility; if maktaba is installed without a compatibility check then
+  maktaba may die loudly.
+
+maktaba#ensure#IsTrue({condition}, [message], [args...])
+                                                     *maktaba#ensure#IsTrue()*
+  Checks that {condition} is nonzero. If not, throws Failure with [message],
+  formatted with [args...].
+  [message] is "No message given." if omitted.
+  Throws ERROR(Failure) if {condition} is zero.
+  Throws ERROR(WrongType) if {condition} is not a number.
+
+maktaba#ensure#IsFalse({condition}, [message], [args...])
+                                                    *maktaba#ensure#IsFalse()*
+  Checks that {condition} is zero. If not, throws Failure with [message],
+  formatted with [args...].
+  [message] is "No message given." if omitted.
+  Throws ERROR(Failure) if {condition} is nonzero.
+  Throws ERROR(WrongType) if {condition} is not a number.
+
+maktaba#ensure#IsEqual({value}, {reference})        *maktaba#ensure#IsEqual()*
+  Ensures that {value} is equal to {reference}. Returns {value} for
+  convenience. Equality is checked using |maktaba#value#IsEqual()|. Note that
+  {value} and {reference} MUST share a type: 1.0 does not equal 1! This is
+  consistent with the behavior of instant() and count() rather than with the
+  behavior of the '==' operator.
+  Throws ERROR(WrongType) if {value} is not the same type as {reference}.
+  Throws ERROR(BadValue) if {value} does not equal {reference}.
+
+maktaba#ensure#IsIn({value}, {values})                 *maktaba#ensure#IsIn()*
+  Ensures that {value} is in {values}. Returns {value} for convenience.
+  Throws ERROR(BadValue) if {value} is not contained in {values}
+  Throws ERROR(BadValue) if {values} is not a list.
+
+maktaba#ensure#Passes({value}, {predicate})          *maktaba#ensure#Passes()*
+  Ensures that {value} passes {predicate}. {predicate} must be something
+  callable (see |maktaba#function#Call|), and must take a single argument. It
+  should return 1 or 0. On a 1, {value} is returned. On a 0, a BadValue error
+  is thrown. Returns {value} for convenience.
+  Throws ERROR(BadValue) if {value} does not pass {predicate}.
+  Throws ERROR(WrongType) if {predicate} is not callable.
+
+maktaba#ensure#TypeMatches({value}, {reference})
+                                                *maktaba#ensure#TypeMatches()*
+  Ensures that {value} has the same type as {reference}. Returns {value} for
+  convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#TypeMatchesOneOf({value}, {values})
+                                           *maktaba#ensure#TypeMatchesOneOf()*
+  Ensures that {value} has the same type as one of the elements in {values}.
+  Returns {value} for convenience
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsBool({value})                       *maktaba#ensure#IsBool()*
+  Ensures that {value} is 0 or 1, returns it for convenience.
+  Throws ERROR(BadValue) if {value} is a number but not 0 or 1.
+  Throws ERROR(WrongType) if {value} is not a number.
+
+maktaba#ensure#IsNumber({value})                   *maktaba#ensure#IsNumber()*
+  Ensures that {value} is a number, returns it for convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsString({value})                   *maktaba#ensure#IsString()*
+  Ensures that {value} is a string, returns it for convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsFuncref({value})                 *maktaba#ensure#IsFuncref()*
+  Ensures that {value} is a funcref, returns it for convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsList({value})                       *maktaba#ensure#IsList()*
+  Ensures that {value} is a list, returns it for convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsDict({value})                       *maktaba#ensure#IsDict()*
+  Ensures that {value} is a dictionary, returns it for convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsFloat({value})                     *maktaba#ensure#IsFloat()*
+  Ensures that {value} is a float, returns it for convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsNumeric({value})                 *maktaba#ensure#IsNumeric()*
+  Ensures that {value} is numeric (float or number), returns it for
+  convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsCollection({value})           *maktaba#ensure#IsCollection()*
+  Ensures that {value} is a collection (list or dict), returns it for
+  convenience.
+  Throws ERROR(WrongType)
+
+maktaba#ensure#IsCallable({value})               *maktaba#ensure#IsCallable()*
+  Ensures that {value} is callable (string or funcref). Returns it for
+  convenience.  This DOES NOT assert that the function denoted by {value}
+  actually exists. It merely ensures that {value} is the correct TYPE for
+  |maktaba#function#Call()|.
+  Throws ERROR(WrongType) if {value} is not a string, funcref, nor dict.
+  Throws ERROR(BadValue) if {value} is a dict but does not appear to be a
+  funcdict.
+
+maktaba#ensure#IsEnum({value})                       *maktaba#ensure#IsEnum()*
+  Ensures that {value} is a maktaba enum object, returns it for convenience.
+  Throws ERROR(WrongType) if {value} is not a dictionary.
+  Throws ERROR(BadValue) if {value} does not appear to be a maktaba enum
+  object.
+
+maktaba#ensure#Matches({value}, {regex})            *maktaba#ensure#Matches()*
+  Ensures that {value} is a string matching {regex}. Case sensitive matching
+  is used. Returns {value} for convenience.
+  Throws ERROR(WrongType)
+  Throws ERROR(BadValue)
+
+maktaba#ensure#PathExists({path})                *maktaba#ensure#PathExists()*
+  Ensures {path} exists on the filesystem. Returns {path} for convenience.
+  Throws ERROR(NotFound) otherwise.
+  Throws ERROR(WrongType) if {path} is not a string.
+
+maktaba#ensure#IsDirectory({path})              *maktaba#ensure#IsDirectory()*
+  Ensures {path} is an existing directory. Returns {path} for convenience.
+  Throws ERROR(NotFound) if {path} does not exist.
+  Throws ERROR(BadValue) if {path} is a file.
+  Throws ERROR(WrongType) if {path} is not a string.
+
+maktaba#ensure#IsFile({path})                        *maktaba#ensure#IsFile()*
+  Ensures {path} is an existing file. Returns {path} for convenience.
+  Throws ERROR(NotFound) if {path} does not exist.
+  Throws ERROR(BadValue) if {path} is a directory.
+  Throws ERROR(WrongType) if {path} is not a string.
+
+maktaba#ensure#FileReadable({path})            *maktaba#ensure#FileReadable()*
+  Ensures {path} is a readable file. Returns {path} for convenience.
+  Throws ERROR(NotFound) if {path} does not exist.
+  Throws ERROR(BadValue) if {path} is a directory.
+  Throws ERROR(NotAuthorized) if {path} cannot be read.
+  Throws ERROR(WrongType) if {path} is not a string.
+
+maktaba#ensure#FileWritable({path})            *maktaba#ensure#FileWritable()*
+  Ensures {path} is a writable file. Returns {path} for convenience.
+  Throws ERROR(NotFound) if {path} does not exist.
+  Throws ERROR(BadValue) if {path} is a directory.
+  Throws ERROR(NotAuthorized) if {path} cannot be written.
+  Throws ERROR(WrongType) if {path} is not a string.
+
+maktaba#ensure#IsAbsolutePath({path})        *maktaba#ensure#IsAbsolutePath()*
+  Ensures {path} is an absolute path. Returns {path} for convenience.
+  Throws ERROR(BadValue) if {path} is not absolute.
+  Throws ERROR(WrongType) if {path} is not a string.
+
+maktaba#ensure#IsRelativePath({path})        *maktaba#ensure#IsRelativePath()*
+  Ensures {path} is a relative path. Returns {path} for convenience.
+  Throws ERROR(BadValue) if {path} is not relative.
+  Throws ERROR(WrongType) if {path} is not a string.
+
+maktaba#enum#Create({names})                           *maktaba#enum#Create()*
+  Creates an enum object from {names}. {names} may be a list of names (in
+  which case they will be valued 0, 1, etc.) or a dictionary of {name: value}.
+  Names and values must be unique. Names must be uppercase. {names} may not be
+  empty.
+
+  The resulting object will be a dict with a member for each name. For
+  example:
+>
+    let g:animals = maktaba#enum#Create(['DUCK', 'PIG'])
+    echomsg g:animals.PIG  " This will echo 1.
+<
+  Throws ERROR(BadValue) if {names} is invalid.
+  Throws ERROR(WrongType) if {names} is not a collection, or contains names
+  that are
+      not strings.
+
+maktaba#error#Warn({message}, [args...])                *maktaba#error#Warn()*
+  Prints {message} in a red warning bar for the user. {message} will be
+  formatted with [args...], as in |printf()|.
+
+maktaba#error#Shout({message}, [args...])              *maktaba#error#Shout()*
+  Prints {message} in an angry red error bar for the user. Don't use
+  |:echoerr|! It doesn't make that red error bar and it prints out the line in
+  the code where the error occurred. It's for debugging, not messaging! If
+  [args...] are given they will be used to expand {message} as in |printf()|.
+
+maktaba#error#Exception({type}, {message}, {fmtargs})
+                                                   *maktaba#error#Exception()*
+  Simple function used for making exception functions. This is very similar to
+  |maktaba#error#Message()| in that it throws
+>
+    ERROR({type}): {message}
+<
+  The only difference is that the {fmtargs} is a required list argument,
+  whereas |maktaba#error#Message()| uses varargs. This function exists to make
+  it easy to write exception functions without messing with vararg logic. For
+  example:
+>
+    function! maktaba#error#NotFound(message, ...)
+      return maktaba#error#Exception('NotFound', a:message, a:000)
+    endfunction
+<
+
+  {type} must contain only letters, numbers, underscores, and hyphens.
+  Throws ERROR(BadValue) if {type} contains invalid characters.
+  Throws ERROR(WrongType) if {type} is not a string.
+
+maktaba#error#Message({type}, {message}, [args...])  *maktaba#error#Message()*
+  Makes an error message in the maktaba vimscript error format. The error
+  message will look like:
+>
+    ERROR({type}): {message}
+<
+  {message} will be formatted with [args...] as in |printf()|.
+
+  {type} must contain only letters, numbers, underscores, and hyphens.
+  Throws ERROR(BadValue) if {type} contains invalid characters.
+  Throws ERROR(WrongType) if {type} is not a string.
+
+maktaba#error#Split({exception})                       *maktaba#error#Split()*
+  Breaks {exception} message into the error type and the error message.
+  Returns both (in a list of length 2).
+  Throws ERROR(BadValue) if {exception} is not a vim nor maktaba exception.
+
+maktaba#error#Try({func}, [exceptions], [default])       *maktaba#error#Try()*
+  Runs {func}. Catches [exceptions] and |maktaba#error#Shout()|s them. Other
+  exceptions are allowed to pass through. If an exception is caught and
+  shouted, [default] is returned.
+
+  USE THIS FUNCTION WHEN YOU WANT ERRORS TO BE EXPOSED TO THE END USER. Do not
+  allow expected exceptions to propagate to the user normally: this will
+  result in an ugly and intimidating stack trace. If a function has EXPECTED
+  failure modes, and you WANT the error messages to be surfaced to the user
+  (without a stack trace), use this function.
+
+  {func} may be any maktaba callable. See |maktaba#function#Create|.
+
+  [exceptions] may either be a regex matched against |v:exception|, or a list
+  of maktaba error names and/or vim error numbers. For example, the following
+  are equivalent:
+>
+    call maktaba#error#Try(g:fn, 'ERROR(BadValue):\|E107:')
+    call maktaba#error#Try(g:fn, ['BadValue', 107])
+<
+  Use '.*' to expose all exceptions.
+
+  [exceptions] is .* if omitted.
+  [default] is 0 if omitted.
+  Throws ERROR(BadValue) if {func} is not a funcdict.
+  Throws ERROR(WrongType) if {func} is not callable, or if [exceptions] is
+  neither a
+      regex nor a list.
+
+maktaba#error#TryCommand({command}, [exceptions]) *maktaba#error#TryCommand()*
+  Like |maktaba#error#Try()|, but executes {command} instead of calling a
+  function.
+  [exceptions] is .* if omitted.
+  Throws ERROR(WrongType) if [exceptions] is neither a regex nor a list.
+
+maktaba#extension#GetRegistry({plugin})      *maktaba#extension#GetRegistry()*
+  Returns an extension registry for the given plugin name.
+  Throws ERROR(WrongType) if {plugin} is not a string.
+
+maktaba#filetype#IsEnabled()                    *maktaba#filetype#IsEnabled()*
+  Returns 1 if filetype detection is enabled in vim, 0 otherwise.
+
+maktaba#filetype#Cycle([reload])                    *maktaba#filetype#Cycle()*
+  Enables new filetypes. This function should be called when plugins have been
+  loaded after normal plugin load time is completed (in which case
+  ftdetect/ftplugin/indent/syntax files would otherwise be ignored). It acts
+  as follows:
+
+  If filetype detection is enabled, filetype detection is cycled. This means
+    that all ftdetect rules in new plugins will come into effect. ftplugin and
+    indent usage are respected: maktaba will neither enable nor disable
+    ftplugin/indent functionality.
+  If syntax highlighting is on, syntax highlighting will not be re-applied.
+    The user must re-edit any existing buffers to get updated highlights.
+  If [reload] is set, BufRead autocmds will be refired. This will cause all
+    open buffers to undergo the filetype detection phase again, causing
+    ftplugin, syntax, and indent rules to be applied to existing buffers.
+
+  [reload] is 0 if omitted.
+
+maktaba#flags#Create({name}, [default])               *maktaba#flags#Create()*
+  Creates a |maktaba.Flag| object for a flag named {name}. The flag will be
+  initialized to [default].
+  [default] is 0 if omitted.
+
+maktaba#function#HasSameName({F}, {G})        *maktaba#function#HasSameName()*
+  Checks whether Funcrefs {F} and {G} refer to the same function name. Ignores
+  bound arguments on partials, so the following check succeeds
+>
+    let F = function('X')
+    let G = function('X', [1])
+    call maktaba#ensure#IsTrue(maktaba#function#HasSameName(F, G))
+<
+  Throws ERROR(WrongType) if either arg is not a Funcref.
+
+maktaba#function#Create({func}, [arglist], [dict]) *maktaba#function#Create()*
+  Creates a funcdict object that can be applied with
+  |maktaba#function#Apply()|. When applied, {func} will be applied with
+  [arglist], a list of arguments. If {func} is already a funcdict, it will be
+  passed the arguments in [arglist] AFTER the arguments that are already
+  pending.
+
+  If [dict] is given it must be a dictionary, which will be passed as the
+  dictionary context to {func} when applied. (In this case, {func} must be a
+  dictionary function.) [dict] may also be the number 0, in which case it will
+  be ignored.
+
+  This allows you to create actual closures in vimscript (by storing context
+  in a dictionary, see |Dictionary-function|.
+
+  Note that the resulting funcdict can only be used in scopes where {func} can
+  be used. For example, if {func} is script-local then the resulting function
+  object is also script-local. (Builtin and autoloaded functions are in the
+  global scope, so if {func} is builtin or autoloaded then the resulting
+  function object can be used anywhere).
+
+  [arglist] is [] if omitted.
+  [dict] is 0 if omitted.
+
+maktaba#function#Call({func}, [arglist], [dict])     *maktaba#function#Call()*
+  Applies {func} (optionally to [arglist], optionally with [dict] as its
+  dictionary context). {func} may be a funcref, a string describing a
+  function, or a maktaba funcdict (see |maktaba#function#Create()|).
+
+  If {func} is a funcdict that has arguments pending, [arglist] will be sent
+  to the function APPENDED to the pending arguments.
+
+  [dict], if given and non-zero, will override any existing dictionary
+  context. Note that if [dict] is given, {func} must describe a dictionary
+  function.
+
+  [arglist] is [] if omitted.
+  [dict] is 0 if omitted.
+
+maktaba#function#Method({dict}, {method})          *maktaba#function#Method()*
+  Creates a funcdict that is {method} on {dict}, with {dict} bound as the
+  dictionary context.
+
+  This is usually what users mean when they say something like dict.Method,
+  but unfortunately, vimscript 'forgets' the dictionary context when you
+  extract a method. Thus, you sometimes have to do things like
+>
+    call call(dict.Method, [args], dict)
+<
+  Which is just silly. Using this function, you can do
+>
+    call maktaba#function#Method(dict, 'Method').Apply(args)
+<
+  which is a little less repetitive.
+
+  Throws ERROR(NotFound) if {dict} has no such {method}.
+
+maktaba#function#Apply({func}, [args...])           *maktaba#function#Apply()*
+  Applies {func} to [args...]. This is like |maktaba#function#Call()|, but
+  allows you to pass arguments in naturally rather than wrapping them in a
+  list.
+
+  Note that because vimscript functions are limited to 20 arguments, and
+  because one argument is spent to specify {func}, this function can only send
+  nineteen arguments on. If this is too limiting, use |#Call|.
+
+maktaba#function#WithArgs({func}, [arg...])      *maktaba#function#WithArgs()*
+  Given callable {func}, creates a function object that will be called with
+  [arg...] when it is applied. If {func} is a funcdict with pending arguments,
+  then when {func} is applied [arg...] will be sent to the inner function
+  AFTER the existing arguments. For example:
+>
+    :echomsg maktaba#function#WithArgs('get', ['a', 'b', 'c']).Apply(1)
+<
+  This will echo b.
+
+  This will always create a new funcdict. {func} will not be modified.
+
+maktaba#function#WithContext({func}, {dict})  *maktaba#function#WithContext()*
+  Creates a funcdict that will call {func} with dictionary context {dict} when
+  applied.
+
+  This will always create a new funcdict. {func} will not be modified.
+
+maktaba#function#FromExpr({expr}, [arglist], [dict])
+                                                 *maktaba#function#FromExpr()*
+  Creates a funcdict that evaluates and returns {expr} when applied. {expr}
+  may reference numbered arguments (|a:1|, a:2, ... through a:19). {expr}
+  itself is available as a:expr. [arglist] will be queued as the initial
+  arguments, if given:
+>
+    :let hello = maktaba#function#FromExpr('a:1 . ", " . a:2', ['Hello'])
+    :echomsg hello.Apply('World')
+<
+  This will echo "Hello, World".
+
+  If [dict] is given then it must be a dictionary, and will be used as the
+  dictionary context for the resulting function. In that case, {expr} may also
+  make use of |self|.
+
+maktaba#function#Compose({g}, {f})                *maktaba#function#Compose()*
+  Creates a composition of {g} and {f}.
+
+  This creates a function object that, when applied, will apply {g} to the
+  result of applying {f} to the given arguments.
+
+  Notice that, as per the usual convention, control flow passes RIGHT TO LEFT:
+  {g} (the FIRST argument) will be run on the result of {f} (the SECOND
+  argument).
+
+  The final result is returned.
+
+
+maktaba#function#Compose({functions...})
+  Composes all of {functions...}, RIGHT to LEFT. For example,
+>
+    :let HGF = maktaba#function#Compose(H, G, F)
+    :call HGF.Apply(x)
+<
+  computes H(G(F(x))).
+
+maktaba#function#Map({list}, {func})                  *maktaba#function#Map()*
+  Replaces each item of {list} with the result of applying {func} to that
+  item. This is like |map|, except {func} may be any maktaba callable and
+  where a new list is created. Unlike the builtin map() function, {list} WILL
+  NOT be modified in place.
+
+  If you really need to modify a list in-place, you can use
+>
+    map({list}, 'maktaba#function#Call({func}, [v:val])')
+<
+
+maktaba#function#Filter({list}, {func})            *maktaba#function#Filter()*
+  Applies {func} to each item in {list}, and removes those for which {func}
+  returns 0. This is like |filter|, except {func} may be any maktaba callable
+  and a new list is created. Unlike the builtin filter() function, {list} WILL
+  NOT be modified in place.
+
+  If you really need to filter a list in-place, you can use
+>
+    filter({list}, 'maktaba#function#Call({func}, [v:val])')
+<
+
+maktaba#function#Reduce({list}, {initial}, {func}) *maktaba#function#Reduce()*
+  Reduces {list} to a single value, using {initial} and {func}. {func} must be
+  a function that takes two values.
+
+  First, {func} is applied to {initial} and the first item in {list}. Then,
+  {func} is applied again to the first result and the second item in {list},
+  and so on. The final result is returned.
+
+  If {list} is empty, {initial} will be returned.
+
+maktaba#function#Reduce1({list}, {func})          *maktaba#function#Reduce1()*
+  Like |maktaba#function#Reduce()|, except {list} must be non-empty. The first
+  item of {list} will be used as the initial value, the remainder of {list}
+  will be reduced.
+
+  Throws ERROR(BadValue) if {list} is empty.
+
+maktaba#function#Sort({list}, {func})                *maktaba#function#Sort()*
+  Sorts {list} IN PLACE, using {func} to determine the order of items in the
+  list. {func} must take two arguments and return either 0 (if they are
+  equal), 1 (if the first item comes after the second item), or -1 (if the
+  second item comes after the first item).
+
+  {list} is returned, for convenience.
+
+  This is like the builtin |sort()| function, except {func} may be any maktaba
+  callable.
+
+maktaba#function#Sorted({list}, {func})            *maktaba#function#Sorted()*
+  Returns a new list that is a sorted copy of {list}. {func} is used to
+  determine the sort order, as in |sort()|.
+
+maktaba#json#Format({value})                           *maktaba#json#Format()*
+  Formats {value} as a JSON text. {value} may be any Vim value other than a
+  Funcref or non-finite Float (or a Dictionary or List containing either).
+  Throws ERROR(BadValue) if the input cannot be represented as JSON.
+
+maktaba#json#Parse({json}, [custom_values])             *maktaba#json#Parse()*
+  Parses the JSON text {json} to a Vim value. If [custom_values] is passed, it
+  is a dictionary mapping JSON primitives (in string form) to custom values to
+  use instead of maktaba#json# sentinels. For example:
+>
+    let value = maktaba#json#Parse('[null]', {'null': ''})
+<
+  Throws ERROR(WrongType) if {json} is not a string or [custom_values] is not
+  a dict.
+  Throws ERROR(BadValue) if {json} is not a valid JSON text.
+  Throws ERROR(BadValue) if [custom_values] keys are invalid JSON primitive
+  names.
+
+maktaba#json#python#Disable()                  *maktaba#json#python#Disable()*
+  Disables the Python implementation of the maktaba#json functions in favour
+  of the Vimscript implementations.  This is mostly intended for testing, but
+  can be used in the event of a problem with the Python implementation.
+
+  This must be called before any of the other maktaba#json functions, since
+  the decision as to which implementation to use is made on first use.
+
+maktaba#json#python#IsDisabled()            *maktaba#json#python#IsDisabled()*
+  Returns whether the Python implementation of the maktaba#json functions is
+  disabled, and prevents further changes.
+
+maktaba#library#Import({library})                   *maktaba#library#Import()*
+  Imports {library}.
+
+  NOTICE: You probably want |maktaba#library#Require()| instead. When calling
+  this function, YOU ARE EXPECTED TO CATCH ERRORS and format the error
+  messages nicely for the user. (See |maktaba#error#Shout|). Otherwise the
+  user will see ugly stack traces.
+
+  NOTICE: {library} MUST BE A LIBRARY PLUGIN. It should provide only
+  autoloaded functions. It should not provide commands, autocmds, key
+  mappings, filetypes, or any other user-impacting functionality.
+  maktaba#library#Require is designed to allow plugins to pull in other
+  plugins without the user worrying about dependencies, but the user should
+  NEVER have weird key mappings / settings changes / etc. appearing due to
+  dependencies required by a rogue plugin.
+
+  This function will act as follows:
+
+    1. Check whether {library} has already been installed via
+      |maktaba#plugin#Install()|.
+    2. Try each installer registered my |maktaba#library#AddInstaller()|, in
+      order of registration.
+
+  The maktaba plugin object will be returned.
+
+  In normal usage, the plugin manager will be used to satisfy library
+  dependencies at the plugin level (via dependency support if available,
+  otherwise manually satisfied by the user). This function is only used to
+  safely access the plugin handle from code, and |maktaba#library#Require()|
+  is used to ensure individual files that depend on the library have access to
+  it (or cause an error to be printed).
+
+  Throws ERROR(NotALibrary) if {library} is not a library plugin.
+  Throws ERROR(NotFound) if {library} cannot be installed by any installer.
+
+maktaba#library#Require({library})                 *maktaba#library#Require()*
+  Requires that {library} be imported. (See |maktaba#library#Import()|).
+
+  Works just like |maktaba#library#Import()|, except errors will be caught and
+  printed in a user-friendly manner (shielding the user from ugly stack
+  dumps). This function returns 1 on success and 0 on failure. Use this
+  instead of |maktaba#library#Import()| when you don't care to grab a handle
+  to the imported plugin object (which is usually).
+
+  In normal usage, the plugin manager will be used to satisfy library
+  dependencies at the plugin level (via dependency support if available,
+  otherwise manually satisfied by the user). This function is only used to
+  ensure individual files that depend on the library have access to it (or
+  cause an error to be printed).
+
+  If a dependency cannot be satisfied, an error message will be shouted, but
+  no error is thrown and the sourcing file will still be allowed to continue
+  executing normally. The plugin code will ordinarily throw additional errors
+  when it tries to call into library code. Errors shouted here are secondary
+  and only intended to provide context and sometimes earlier detection.
+
+  Throws ERROR(NotALibrary) if {library} describes a non-library plugin.
+
+maktaba#library#AddInstaller({name}, {installer})
+                                              *maktaba#library#AddInstaller()*
+  Adds a library installer.
+
+  {installer} should be a callable that takes a single argument (the name of a
+  library). {installer} must take one two actions.
+
+    1. Return the installed maktaba plugin object (see
+      |maktaba#plugin#Install()|.
+    2. Throw a NotFound error if the plugin cannot be found.
+
+  {installer} need not worry about verifying that the installed plugin is
+  actually a library plugin, that is handled by maktaba.
+
+  This function returns a function which, when applied, unregisters
+  {installer}. Hold on to it if you expect you'll need to remove {installer}.
+
+  Throws ERROR(BadValue) if there's already an installer registered under
+  {name}.
+
+maktaba#library#RemoveInstaller({name})    *maktaba#library#RemoveInstaller()*
+  Removes the library installer named {name}.
+  Throws ERROR(NotFound) if no such installer exists.
+
+maktaba#list#RemoveItem({list}, {item})            *maktaba#list#RemoveItem()*
+  Removes the first instance of {item} from {list}. {list} is returned for
+  convenience. This is different from |remove()|, which removes a certain
+  index from a list. {list} is modified in place and returned for convenience.
+  Throws ERROR(NotFound) if {item} is not in {list}.
+
+maktaba#list#RemoveDuplicates({list})        *maktaba#list#RemoveDuplicates()*
+  Removes duplicates in {list} in-place. {list} is returned for convenience.
+
+maktaba#list#RemoveAll({list}, {item})              *maktaba#list#RemoveAll()*
+  Removes all instances of {item} from {list}. {list} is modified in place and
+  returned for convenience.
+
+maktaba#log#SetNotificationLevel({level}) *maktaba#log#SetNotificationLevel()*
+  Sets the minimum {level} of log messages that will trigger a user
+  notification, or -1 to disable notifications. By default, the user will be
+  notified after every message logged at WARN or higher.
+
+  Notifications will be sent using |maktaba#error#Shout()| for ERROR and
+  SEVERE messages, |maktaba#error#Warn()| for WARN, and |:echomsg| for INFO
+  and DEBUG.
+  Throws ERROR(BadValue)
+
+maktaba#log#Logger({context})                           *maktaba#log#Logger()*
+  Creates a |maktaba.Logger| interface for {context}.
+
+maktaba#log#AddHandler({handler}, [fire_recent])    *maktaba#log#AddHandler()*
+  Registers {handler} to receive log entries. {handler} must refer to a
+  function that takes 1 argument, an opaque data structure representing a log
+  entry. Handlers can collect these and them pass back as a list into maktaba
+  log entry manipulation functions like |maktaba#log#GetFormattedEntries()|.
+
+  As a legacy fallback, maktaba will support a handler that takes 4 arguments:
+  level (number), timestamp (number), context (string), and message (string).
+
+  If [fire_recent] is 1 and messages have already been logged before a handler
+  is added, some recent messages may be passed to the handler as soon as it's
+  registered. The number of messages stored is controlled by vim's 'history'
+  setting.
+
+  This function returns a function which, when applied, unregisters {handler}.
+  Hold on to it if you expect you'll need to remove {handler}.
+  [fire_recent] is 0 if omitted.
+
+maktaba#log#GetFormattedEntries({entries}, {minlevel}, [contexts])
+                                           *maktaba#log#GetFormattedEntries()*
+  Returns a list of human-readable strings each representing a log entry from
+  {entries}. Excludes messages with level less than {minlevel} or not
+  originating from one of [contexts]. To get the entire unfiltered list of
+  entries, pass a {minlevel} of `maktaba#log#LEVELS.DEBUG` and no [contexts]
+  arg. Each item in {entries} must be a value maktaba passed to a log handler
+  call.
+
+maktaba#path#AsDir({path})                              *maktaba#path#AsDir()*
+  Returns {path} with trailing slash (forward or backslash, depending on
+  platform). Maktaba uses paths with trailing slashes to unambiguously denote
+  directory paths, so utilities like |maktaba#path#Dirname()| don't try to
+  interpret them as file paths.
+
+maktaba#path#StripTrailingSlash({path})    *maktaba#path#StripTrailingSlash()*
+  Returns {path} with trailing slashes (if any) stripped (forward or
+  backslash, depending on platform).
+
+maktaba#path#RootComponent({path})              *maktaba#path#RootComponent()*
+  Returns the root component of {path}. In unix, / is the only root. In
+  windows, the root can be \ (which vim treats as the default drive), a drive
+  like D:\\, and also / or D:// if shellslash is set. The root of a relative
+  path is empty.
+
+maktaba#path#IsAbsolute({path})                    *maktaba#path#IsAbsolute()*
+  Whether {path} is absolute.
+
+maktaba#path#IsRelative({path})                    *maktaba#path#IsRelative()*
+  Whether {path} is relative.
+
+maktaba#path#Join({components})                          *maktaba#path#Join()*
+  Joins the list {components} together using the system separator character.
+  Works like python's os.path.join in that
+>
+    Join(['relative', '/absolute'])
+<
+  is '/absolute'
+
+maktaba#path#Split({path})                              *maktaba#path#Split()*
+  Splits {path} on the system separator character, preserving root and
+  trailing slash, if any. For example:
+>
+    :echomsg maktaba#path#Split('relative/path')
+    :echomsg maktaba#path#Split('/absolute/path')
+    :echomsg maktaba#path#Split('path/to/dir/')
+<
+  will echo
+  `['relative', 'path']`
+  `['/absolute', 'path']`
+  `['path', 'to', 'dir/']`
+
+maktaba#path#Basename({path})                        *maktaba#path#Basename()*
+  The basename of {path}. Trailing slash matters. Consider:
+>
+    :echomsg maktaba#path#Basename('/path/to/file')
+    :echomsg maktaba#path#Basename('/path/to/dir/')
+<
+  The first echoes 'file', the second echoes ''.
+
+  A bare filename is its own basename:
+>
+    :echomsg maktaba#path#Basename('file')
+<
+  This echoes 'file'.
+
+maktaba#path#Dirname({path})                          *maktaba#path#Dirname()*
+  The dirname of {path}. Trailing slash matters. Consider:
+>
+    :echomsg maktaba#path#Dirname('/path/to/file')
+    :echomsg maktaba#path#Dirname('/path/to/dir/')
+<
+  The first echoes '/path/to', the second echoes '/path/to/dir'.
+
+  A bare filename with no slashes returns an empty dirname:
+>
+    :echomsg maktaba#path#Dirname('file')
+<
+  This echoes ''.
+
+maktaba#path#GetDirectory({path})                *maktaba#path#GetDirectory()*
+  Gets the directory path of {path}. If {path} appears to point to a file, the
+  parent directory will be returned. Otherwise, {path} will be returned. In
+  both cases, the returned {path} will have a tailing slash.
+
+maktaba#path#MakeRelative({root}, {path})        *maktaba#path#MakeRelative()*
+  Returns a relative path from {root} to {path}. Both paths must be absolute.
+  {root} is assumed to be a directory. In windows, both paths must be in the
+  same drive.
+  Throws ERROR(BadValue) unless both paths are absolute.
+
+maktaba#path#Exists({path})                            *maktaba#path#Exists()*
+  Checks whether {path} (a file or directory) exists on the filesystem.
+
+maktaba#path#MakeDirectory({dir})               *maktaba#path#MakeDirectory()*
+  Makes {dir}. Returns 0 if {dir} already exists. Returns 1 if {dir} is
+  created. This function is similar to |mkdir()| with the 'p' flag, but works
+  around a Vim7.3 bug where mkdir chokes on trailing slashes.
+  Throws ERROR(BadValue) if {dir} is a file.
+  Throws ERROR(NotAuthorized) if {dir} cannot be created.
+
+maktaba#plugin#Enter({file})                          *maktaba#plugin#Enter()*
+  This function is used to both control when plugin files are entered, and get
+  a handle to the current plugin object. It should be called from the top of
+  an autoload/*.vim, plugin/*.vim, ftplugin/*.vim, or instant/*.vim file as
+  follows:
+>
+    let [s:plugin, s:enter] = maktaba#plugin#Enter(expand('<sfile>:p'))
+    if !s:enter
+      finish
+    endif
+<
+  The result is a tuple containing the plugin object and a boolean specifying
+  whether the file should be entered (taking user preferences and whether the
+  file has already been sourced into account). If the second value is false,
+  the script should finish immediately.
+
+  autoload/*.vim files are entered on demand (see |autoload|), this function
+  only helps prevent re-entry.
+
+  For plugin/*.vim and instant/*.vim files, maktaba ensures that the file is
+  only entered once, and then only if the user has not disabled the file via
+  the plugin[*] or instant[*] flags.
+
+  In ftplugin/*.vim files, maktaba ensures that the file is loaded only once
+  per buffer.
+
+  Note that maktaba does NOT set the g:loaded_{plugin} variable, as
+  recommended in the write-plugin helpfiles. This is because maktaba plugins
+  may span multiple files, and there is no clear moment when the plugin is
+  "loaded". If you feel you must adhere to this convention, be sure to set the
+  appropriate g:loaded_* variable when appropriate.
+
+maktaba#plugin#Detect()                              *maktaba#plugin#Detect()*
+  Scans 'runtimepath' for any unregistered plugins and registers them with
+  maktaba. May trigger instant/ hooks for newly-registered plugins.
+
+maktaba#plugin#RegisteredPlugins()        *maktaba#plugin#RegisteredPlugins()*
+  A list of all installed plugins in alphabetical order. Automatically detects
+  unregistered plugins using |maktaba#plugin#Detect()|.
+
+maktaba#plugin#IsRegistered({plugin})          *maktaba#plugin#IsRegistered()*
+  1 if {plugin} was registered with maktaba#plugin#Register. This is more
+  reliable for determining if a Maktaba compatible plugin by the name of
+  {plugin} was registered, but can not be used to dependency check non-Maktaba
+  plugins. Detects plugins added to 'runtimepath' even if they haven't been
+  explicitly registered with maktaba.
+
+maktaba#plugin#CanonicalName({plugin})        *maktaba#plugin#CanonicalName()*
+  The canonical name of {plugin}. This is the name of the plugin directory
+  with any "vim-" prefix or ".vim" suffix stripped off: both "vim-unimpaired"
+  and "unimpaired.vim" would become simply "unimpaired".
+
+  Note that plugins with different names in the filesystem can conflict in
+  maktaba. If you've loaded a plugin in the directory "plugins/vim-myplugin"
+  then maktaba can't handle a plugin named "plugins/myplugin". Make sure your
+  plugins have sufficiently different names!
+
+maktaba#plugin#Install({dir}, [settings])           *maktaba#plugin#Install()*
+  Installs the plugin located at {dir}. Installation entails adding the plugin
+  to the runtimepath, loading its flags.vim file, and sourcing any files in
+  its instant/ directory.
+
+  Returns the maktaba plugin object describing the installed plugin.
+
+  {dir} should be the full path to the plugin directory. The plugin itself
+  should be the last component in the directory path. If the plugin doesn't
+  have an explicit name declared in addon-info.json, the plugin name will be
+  the name of this directory with all invalid characters converted to
+  underscores (see |maktaba#plugin#CanonicalName()|).
+
+  If the plugin contains a plugin/ directory it will have a special "plugin"
+  dictionary flag that controls which plugin files are loaded. For example, if
+  the plugin contains plugin/commands.vim, you can use
+>
+    let plugin = maktaba#plugin#Install(path)
+    call plugin.Flag('plugin[commands]', 0)
+<
+  to disable it. More generally, "plugin" is a dictionary whose keys control
+  the loading of plugin files. A file's key is its filename without the '.vim'
+  extension. Set the key to 0 to prevent the file from loading or 1 to allow
+  it to load.
+
+  Note that setting the key to 1 only ALLOWS the file to load: if load time
+  has already passed, enabling the plugin file will not cause it to load. To
+  load plugin files late use |Plugin.Load|.
+
+  All plugin files are loaded by default EXCEPT the file plugin/mappings.vim,
+  which is opt-in. (Set plugin[mappings] to 1 to enable.)
+
+  If the plugin contains an instant/ directory it will also have a special
+  "instant" flag, which acts similarly to the special "plugin" flag for
+  instant/*.vim files. For example, in a plugin with an instant/earlyfile.vim,
+  the following DOES NOT WORK:
+>
+    let plugin = maktaba#plugin#Install(path)
+    call plugin.Flag('instant[earlyfile]', 0)
+<
+  All instant/*.vim files are sourced during installation. In order to
+  configure the "instant" flag, you must pass [settings] to the installation
+  function. If given, they must be a list of maktaba settings (see
+  |maktaba#setting#Create|). They will be applied after instant/flags.vim is
+  sourced (if present), but before any other instant files are sourced. For
+  example:
+>
+    let noearly = maktaba#setting#Parse('instant[earlyfile]=0')
+    let plugin = maktaba#plugin#Install(path, [noearly])
+<
+  Throws ERROR(BadValue) if {dir} is empty.
+  Throws ERROR(AlreadyExists) if the plugin already exists.
+  Throws ERROR(ConfigError) if [settings] cannot be applied to this plugin.
+
+maktaba#plugin#Get({plugin})                            *maktaba#plugin#Get()*
+  Gets the plugin object associated with {plugin}. {plugin} may either be the
+  name of the plugin directory, or the canonicalized plugin name (with any
+  "vim-" prefix or ".vim" suffix stripped off). See
+  |maktaba#plugin#CanonicalName()|. Detects plugins added to 'runtimepath'
+  even if they haven't been explicitly registered with maktaba.
+  Throws ERROR(NotFound) if the plugin object does not exist.
+
+maktaba#plugin#GetOrInstall({dir}, [settings]) *maktaba#plugin#GetOrInstall()*
+  Installs the plugin located at {dir}, unless it already exists. The
+  appropriate maktaba plugin object is returned.
+
+  [settings], if given, must be a list of maktaba settings (see
+  |maktaba#setting#Create|). If the plugin is new, they will be applied as in
+  |maktaba#plugin#Install()|. Otherwise, they will be applied before returning
+  the plugin object.
+
+  See also |maktaba#plugin#Install()|.
+  Throws ERROR(AlreadyExists) if the existing plugin comes from a different
+  directory.
+  Throws ERROR(ConfigError) if [settings] cannot be applied to this plugin.
+
+maktaba#plugin#Source({file}, [optional])            *maktaba#plugin#Source()*
+  Sources {file}, which should be a list specifying the location of a file
+  from the plugin root. For example, if you want to source
+  plugin/commands.vim, call this function on ['plugin', 'commands']. The
+  referenced file will be sourced, if it exists. Otherwise, exceptions will be
+  thrown, unless you set [optional]. If [optional] exists, this function
+  returns whether or not the file was actually sourced.
+  [optional] is 0 if omitted.
+  Throws ERROR(BadValue) if {file} describes a directory.
+  Throws ERROR(NotAuthorized) if {file} cannot be read.
+  Throws ERROR(NotFound) if {file} does not describe a plugin file.
+
+maktaba#plugin#HasFlag({flag})                      *maktaba#plugin#HasFlag()*
+  Whether or not the plugin has a flag named {flag}.
+
+maktaba#python#ImportModule({plugin}, {name})  *maktaba#python#ImportModule()*
+  Imports python module {name} into vim from {plugin}. Checks for {name} in
+  the plugin's python/ subdirectory for the named module.
+
+  For example:
+>
+    call maktaba#python#ImportModule(maktaba#plugin#Get('foo'), 'foo.bar')
+    python print foo.bar
+<
+  will print something like
+
+    <module 'foo.bar' from 'repopath/foo/python/foo/bar.py'>
+
+  Throws ERROR(NotFound) if the module or python/ subdirectory wasn't found.
+  Throws ERROR(MissingFeature) if vim instance is missing Python support.
+
+maktaba#python#Eval({expr})                            *maktaba#python#Eval()*
+  Evaluate python {expr} and return the result.
+
+  Polyfill for vim's |pyeval()| or |py3eval()| that works on vim versions
+  older than 7.3.569. You can call pyeval() directly if you don't intend to
+  support vim versions older than that.
+
+  Supports simple types (number, string, list, dict), but not other
+  python-only types like None, True, or False that have no direct vimscript
+  analog. Those will fail on older vim versions, so either take care to avoid
+  them in the return value or just skip the polyfill and use pyeval()
+  directly.
+
+  WARNING: This will not have access to l: or a: variables from the caller, so
+  use `vim.eval()` with caution inside {expr}. Call pyeval() directly if you
+  need to access those. Inlining simple values into {expr} can also work, but
+  watch out for issues with string quoting, etc.
+
+  Throws ERROR(MissingFeature) if vim instance is missing Python support.
+
+maktaba#rtp#Split([paths])                               *maktaba#rtp#Split()*
+  Split [paths], a string of comma-separated path entries, into a list of
+  paths. Handles unescaping the commas. Paths will be canonicalized using
+  |maktaba#rtp#AsDir()| so they're unambiguously interpreted as directory
+  paths.
+  [paths] is 'runtimepath' if omitted.
+
+maktaba#rtp#Join({paths})                                 *maktaba#rtp#Join()*
+  Joins {paths}, a list of strings, into a comma-separated strings. Handles
+  the escaping of commas in {paths}.
+
+  Trailing slashes will be stripped, following the precedent of vim itself not
+  including trailing slashes. This is also safer since trailing backslashes on
+  Windows are a source of bugs, and it doesn't lead to ambiguity since all
+  paths should be dirs. Note that |maktaba#rtp#Split()| converts paths back to
+  canonical representation, with trailing slashes included.
+
+maktaba#rtp#Add({path})                                    *maktaba#rtp#Add()*
+  Adds {path} to the runtimepath.
+
+  In vanilla vim, the runtime path is sorted as follows:
+    1. User's vim files.
+    2. System vim files.
+    3. System after/ files.
+    4. User's after/ files.
+  This lets the user run both first and last, which is nice. This function
+  puts plugin vim files between 2nd in the list (between 1 and 2), and puts
+  plugin after/ files 2nd to last in the list (between 3 and 4). The newest
+  plugin that you've installed will be the 2nd thing sourced (after user
+  files) and its after directory will be the 2nd to last thing sourced (before
+  user files). Thus, plugins stack outwards from the middle, like an onion.
+
+  If {path} is already in the runtimepath, the existing instances will be
+  removed and {path} will be re-inserted as described above.
+
+  If you have more than one directory of files that you'd like to run
+  before/after all plugins, it is recommended that you add that directory
+  after all plugins and/or sort the runtimepath yourself.
+  |maktaba#rtp#Split()| and |maktaba#rtp#Join()| may be of some use.
+
+maktaba#rtp#Remove({path})                              *maktaba#rtp#Remove()*
+  Removes {path} from the runtimepath.
+
+maktaba#rtp#LeafDirs()                                *maktaba#rtp#LeafDirs()*
+  Returns a dictionary of {leaf path} for runtimepath directories that appear
+  to be plugins. The key is the name of the leaf directory, the path is the
+  precise position of the leaf directory (as given in the runtimepath).
+
+  A leaf directory is the final path component of any runtimepath directory,
+  excepting directories named like the following:
+    * .vim
+    * vimfiles
+    * vim\d*
+    * runtime
+    * after
+  which are assumed to be user-, system-, or plugin-owned runtimepath
+  components.
+
+  This can be used heuristically to return a dictionary of installed plugins,
+  so long as the user has not added non-standard directories to their
+  runtimepath. Note however that we can't guarantee that all non-system
+  non-user non-after runtimepath components actually correspond to valid
+  plugins.
+
+maktaba#rtp#HasLeafDir({leaf})                      *maktaba#rtp#HasLeafDir()*
+  Returns 1 if it looks like {leaf} exists on the runtimepath. This is a
+  guess, and should not be treated as a guarantee. If you have a directory
+  named like {leaf} on your runtimepath, or if {leaf} looks like it's a normal
+  vim runtime directory, then this function may return a false
+  positive/negative.
+
+maktaba#rtp#Load({dir})                                   *maktaba#rtp#Load()*
+  Mimics the normal vim load sequence for {dir}, which will be added to the
+  runtimepath if it is not already there. This should be done only on
+  directories that were not present for the normal vim load sequence.
+
+  All files in the plugin/ directory will be sourced. After that,
+  maktaba#filetype#Cycle will be called if the plugin has installed any new
+  filetypes.
+
+  If the plugin is a maktaba plugin, you should use maktaba#plugin#Install
+  instead.
+  Throws ERROR(NotFound) if {dir} does not exist.
+  Throws ERROR(BadValue) if {dir} does not describe a directory.
+
+maktaba#rtp#DirDefinesFiletypes({dir})     *maktaba#rtp#DirDefinesFiletypes()*
+  Whether or not runtimepath directory {dir} defines a new filetype.
+
+maktaba#selector#Create({infolist})                *maktaba#selector#Create()*
+  Creates a |maktaba.Selector| from {infolist} that can be configured and
+  shown.
+
+  Each entry in {infolist} may be either a line to display, or a 2-item list
+  containing `[LINE, DATA]`. If present, DATA will be passed to the action
+  function as a second argument.
+
+maktaba#setting#ParseHandle({text})            *maktaba#setting#ParseHandle()*
+  Parses a flag handle off of {text}, returns a tuple containing [flagname,
+  foci, leftover]. See |maktaba#setting#Handle()|; the only difference is that
+  this function returns the leftover text after parsing instead of requiring
+  that {text} exactly describe a flag handle.
+
+maktaba#setting#Handle({handle})                    *maktaba#setting#Handle()*
+  Parses {handle} into a tuple [flagname, foci] where foci is a list of
+  numbers and strings. An example may make this clear:
+>
+    :echomsg maktaba#setting#Handle('flag')
+    ~ ['flag', []]
+
+    :echomsg maktaba#setting#Handle('flag[list][3][val]')
+    ~ ['flag', ['list', 3, 'val']]
+<
+  More specifically, this parses a flag name and a series of foci in square
+  brackets. A flag name may contain alphanumeric characters and underscores.
+  Flag names may also contain, BUT NOT END WITH, the following characters:
+  . / : #
+
+  Foci are kept in square brackets. They are not allowed to contain square
+  brackets. They should describe either dictionary keys or list indices.
+
+  You're encouraged to use this function when you're exposing complex flags to
+  users. Flag handles are part of the maktaba setting syntax. See
+  |maktaba#setting#Create()| for more.
+  Throws ERROR(BadValue) if {handle} is invalid.
+
+maktaba#setting#Parse({text})                        *maktaba#setting#Parse()*
+  Parses a setting from {text}. Returns a tuple [setting, leftover] containing
+  first the parsed setting object and second the remaining text. See
+  |maktaba#setting#Create()| for details, the only difference is that this
+  function returns the leftover text rather than requiring that the text
+  exactly specify a setting. The setting must either be the whole string, or
+  must be followed by whitespace. The leftover string will be returned with
+  leading whitespace stripped, so that the leftover result is suitable for
+  another parse immediately.
+  Throws ERROR(BadValue) if {text} has invalid syntax.
+
+maktaba#setting#Create({text})                      *maktaba#setting#Create()*
+  Creates a maktaba setting from {text}.
+  Throws ERROR(BadValue) if {text} has invalid syntax.
+
+maktaba#setting#ParseAll({text})                  *maktaba#setting#ParseAll()*
+  Parses a list of settings from {text}. Settings must be separated by spaces
+  or tabs. This is the same as repeating |maktaba#setting#Parse()| until
+  {text} is empty.
+  Throws ERROR(BadValue) if {text} does not describe valid settings.
+
+maktaba#string#Strip({string}, [chars])               *maktaba#string#Strip()*
+  Returns {string} stripped of [chars] from both ends. [chars] should be a
+  string of characters. THE ORDER OF [chars] DOES NOT MATTER: stripping will
+  continue so long as the prefix/suffix contains one of [chars]. For example:
+>
+    maktaba#string#Strip('0xDEADBEEF', "ABCDEF") == '0x'
+<
+  [chars] is " \t\n\r" if omitted.
+
+maktaba#string#StripLeading({string}, [chars]) *maktaba#string#StripLeading()*
+  Returns {string} stripped of [chars] (a string of characters) from the
+  front. THE ORDER OF [chars] DOES NOT MATTER: stripping will continue so long
+  as the prefix contains one of [chars]. See also |maktaba#string#Strip()|.
+  [chars] is " \t\n\r" if omitted.
+
+maktaba#string#StripTrailing({string}, [chars])
+                                              *maktaba#string#StripTrailing()*
+  Returns {string} stripped of [chars] (a string of characters) from the end.
+  THE ORDER OF [chars] DOES NOT MATTER: stripping will continue so long as the
+  suffix contains one of [chars]. See also |maktaba#string#Strip()|.
+  [chars] is " \t\n\r" if omitted.
+
+maktaba#string#StartsWith({string}, {prefix})    *maktaba#string#StartsWith()*
+  Whether or not {string} starts with {prefix}.
+
+maktaba#string#EndsWith({string}, {suffix})        *maktaba#string#EndsWith()*
+  Whether or not {string} ends with {suffix}.
+
+maktaba#syscall#IsAsyncAvailable()        *maktaba#syscall#IsAsyncAvailable()*
+  Returns whether the current vim session supports asynchronous calls.
+
+maktaba#syscall#Create({cmd})                       *maktaba#syscall#Create()*
+  Creates a |maktaba.Syscall| object that can be used to execute {cmd} with
+  |Syscall.Call()|. {cmd} may be a pre-escaped string, a list of words to be
+  automatically escaped and joined. Also accepts an existing Syscall object
+  and returns it for convenience.
+  Throws ERROR(WrongType)
+
+maktaba#syscall#SetAsyncDisabledForTesting({disabled})
+                                *maktaba#syscall#SetAsyncDisabledForTesting()*
+  Disables asynchronous calls if {disabled} is true. Enables otherwise.
+
+maktaba#syscall#ForceSyncFallbackAllowedForTesting({force})
+                        *maktaba#syscall#ForceSyncFallbackAllowedForTesting()*
+  Sets whether to override |Syscall.CallAsync()|'s allow_sync_fallback
+  argument and unconditionally {force} it to 1. Passing 0 restores normal
+  behavior.
+
+maktaba#test#Override({target}, {replacement})       *maktaba#test#Override()*
+  Overrides the function {target} such that when it is called, {replacement}
+  is called instead. This is particularly useful for overloading autoloaded
+  functions, which can only be done in files that are named correctly.
+  (name#spaced#Function must be defined in .../name/spaced.vim).
+
+  You can de-override the function via the 'runtime' command, for example:
+>
+    runtime autoload/name/spaced.vim
+<
+  will source the original name/spaced.vim, clobbering the overridden
+  function.
+
+  Due to vim's naming limitations, this function must make (and source) an
+  adequately named temporary file. As such, {replacement} MUST be a string,
+  funcref, or funcdict usable from any given scope (i.e., not script-local).
+
+maktaba#user#Name()                                      *maktaba#user#Name()*
+  Gets the user's name.
+
+maktaba#user#CacheDir()                              *maktaba#user#CacheDir()*
+  Gets a directory that can be used for cache files, creating it if necessary.
+  Respects $XDG_CACHE_HOME if present.
+  Throws ERROR(NotAuthorized) if the directory does not exist and cannot be
+  created.
+
+maktaba#user#DataDir()                                *maktaba#user#DataDir()*
+  Gets a directory that can be used for data files, creating it if necessary.
+  Respects $XDG_DATA_HOME if present.
+  Throws ERROR(NotAuthorized) if the directory does not exist and cannot be
+  created.
+
+maktaba#user#ConfigDir()                            *maktaba#user#ConfigDir()*
+  Gets a directory that can be used for config files, creating it if
+  necessary. Respects $XDG_CONFIG_HOME if present.
+  Throws ERROR(NotAuthorized) if the directory does not exist and cannot be
+  created.
+
+maktaba#value#IsEqual({a}, {b})                      *maktaba#value#IsEqual()*
+  Tests whether values {a} and {b} are equal. This works around a number of
+  limitations in vimscript's == operator. Unlike with the == operator,
+    1. String comparisons are case sensitive.
+    2. {a} and {b} must be of the same type: 0 does not equal '0'.
+    3. 0 == [] is false (instead of throwing an exception).
+  The == operator is insane. Use this instead.
+
+  NOTE: {a} AND {b} MUST BE OF THE SAME TYPE. 1.0 DOES NOT EQUAL 1! This is
+  consistent with the behavior of equality established by |index()| and
+  |count()|, but may be surprising to some users.
+
+  NOTE: Funcref comparison is by func name only prior to patch 7.4.1875 (any
+  partial of the same function name was considered equal).
+
+maktaba#value#IsIn({value}, {list})                     *maktaba#value#IsIn()*
+  Whether {value} is in {list}.
+  Throws ERROR(BadValue) if {list} is not a list.
+
+maktaba#value#EmptyValue({value})                 *maktaba#value#EmptyValue()*
+  Returns the empty value for {value}. This is 0, 0.0, '', [], {}, or 'empty',
+  depending upon the value type.
+
+maktaba#value#TypeName({value})                     *maktaba#value#TypeName()*
+  Returns the type of {value} as a string. One of "number", "string",
+  "funcref", "list", "dictionary", "float", "boolean", "null", "none", "job",
+  or "channel". See also |type()|.
+
+maktaba#value#TypeMatches({value}, {reference})  *maktaba#value#TypeMatches()*
+  1 if {value} has the same type as {reference}, 0 otherwise.
+
+maktaba#value#TypeMatchesOneOf({value}, {references})
+                                            *maktaba#value#TypeMatchesOneOf()*
+  1 if {value} has the same type as one of the elements in {references}. 0
+  otherwise.
+
+maktaba#value#IsNumber({value})                     *maktaba#value#IsNumber()*
+  1 if {value} is a vimscript "number" (more commonly known as "integer", 0
+  otherwise. Remember that vimscript calls integers "numbers".
+
+maktaba#value#IsString({value})                     *maktaba#value#IsString()*
+  1 if {value} is a string, 0 otherwise.
+
+maktaba#value#IsFuncref({value})                   *maktaba#value#IsFuncref()*
+  1 if {value} is a funcref, 0 otherwise.
+
+maktaba#value#IsList({value})                         *maktaba#value#IsList()*
+  1 if {value} is a list, 0 otherwise.
+
+maktaba#value#IsDict({value})                         *maktaba#value#IsDict()*
+  1 if {value} is a dict, 0 otherwise.
+
+maktaba#value#IsFloat({value})                       *maktaba#value#IsFloat()*
+  1 if {value} is a floating point number, 0 otherwise.
+
+maktaba#value#IsNumeric({value})                   *maktaba#value#IsNumeric()*
+  1 if {value} is numeric (integer or float, which vimscript stupidly refers
+  to as "number" and "float"). 0 otherwise.
+
+maktaba#value#IsCollection({value})             *maktaba#value#IsCollection()*
+  1 if {value} is a collection type (list or dict). 0 otherwise.
+
+maktaba#value#IsCallable({value})                 *maktaba#value#IsCallable()*
+  1 if {value} is a callable type (string or function), 0 otherwise. This DOES
+  NOT guarantee that the function indicated by {value} actually exists.
+
+maktaba#value#IsEnum({value})                         *maktaba#value#IsEnum()*
+  1 if {value} is a maktaba enum type, 0 otherwise.
+
+maktaba#value#Focus({target}, {foci}, [value])         *maktaba#value#Focus()*
+  Focuses on a part of {target} specified by {foci}. That object will either
+  be returned, or set to [value] if [value] is given (in which case {target}
+  is returned). Examples will make this clearer:
+>
+    maktaba#value#Focus({'a': [0, {'b': 'hi!'}, 1]}, ['a', 1, 'b']) == 'hi'
+<
+  Notice how this function lets you focus on one part of a complex data
+  structure. You can also use it to modify the data structure:
+>
+    maktaba#value#Focus({'a': {'b': 0}}, ['a', 'b'], 2) == {'a': {'b': 2}}
+<
+  The only real reason to use this code is because it destructures {target} in
+  a safe way, throwing exceptions if the implicit assumptions aren't met.
+  Throws ERROR(BadValue) if {target} cannot be deconstructed the way {foci}
+  expects.
+  Throws ERROR(WrongType) if {foci} contains the wrong types to index
+  {target}.
+
+maktaba#value#Save({variable})                          *maktaba#value#Save()*
+  Captures the state of a {variable} into a returned dict. The return value
+  can be passed to |maktaba#value#Restore()| to restore the listed variable to
+  its captured state.
+  Throws ERROR(WrongType)
+  Throws ERROR(BadValue)
+
+maktaba#value#SaveAll({variables})                   *maktaba#value#SaveAll()*
+  Captures the state of a list of {variables} into a returned dict. The return
+  value can be passed to |maktaba#value#Restore()| to restore all listed
+  variables to their captured state.
+  Throws ERROR(WrongType)
+  Throws ERROR(BadValue)
+
+maktaba#value#Restore({state})                       *maktaba#value#Restore()*
+  Restores the previously-captured {state} of the set of variables. {state} is
+  a dict returned from a previous call to |maktaba#value#Save()| or
+  |maktaba#value#SaveAll()|.
+  Throws ERROR(WrongType)
+  Throws ERROR(BadValue)
+
+==============================================================================
+ERROR HANDLING                                            *maktaba-exceptions*
+
+Maktaba provides utilities for error handling in vim. Unfortunately, error
+handling in vim is insane. The "catch" command takes a regex that matches the
+error message. You should always match an error code, because the message
+itself can be locale dependant. Vim's error codes are opaque and poorly
+documented.
+
+To make matters worse, you can't define error codes as variables and catch
+them, because
+>
+  catch g:MY_ERROR_CODE
+<
+tries to match the literal characters 'g:MY_ERROR_CODE', not the result of the
+variable. And you can't use
+>
+  execute 'catch' g:MY_ERROR_CODE
+<
+because execute runs WITHIN the context of the try block -- |:execute|d catch
+are completely ignored.
+
+And just to keep things interesting, your catch statements had better not use
+the ^ atom, because the error code isn't always at the beginning of the
+exception text. Vim may tack other context data at the beginning. The best you
+can do is something like this:
+>
+  " Function not found.
+  catch /E117:/
+<
+
+and hope that normal error text doesn't contain things that look like error
+codes. Vimscript doesn't allow us much in the way of error safety: the best we
+can do is establish a convention and play make-believe. The convention is as
+follows:
+
+  1. Use error names (CamelCased short versions of the error type) instead of
+    opaque error codes. This makes your code more readable.
+  2. Wrap error codes in ERROR() instead of E...: This differentiates custom
+    errors from vim errors and has the pleasant side effect of tricking the
+    vim syntax highlighting into thinking we know what we're doing.
+
+Example:
+>
+  ERROR(NotFound): File "your/file" not found.
+<
+
+Below you'll find helper functions for generating such error messages. With
+any luck, this will help you avoid a few typos.
+
+                                                        *ERROR(NotAuthorized)*
+For when someone tries to do something they shouldn't.
+
+                                                             *ERROR(NotFound)*
+For when someone expected something to be there, and it wasn't.
+
+                                                       *ERROR(NotImplemented)*
+For attempts to use functionality that is not supported, usually for cases
+where an interface implies support that isn't implemented due to technical
+limitations.
+
+                                                            *ERROR(WrongType)*
+For when a caller tried to use the wrong type of arguments to a function.
+
+                                                             *ERROR(BadValue)*
+For when a caller tried to pass an unusable value to a function.
+
+                                                     *ERROR(InvalidArguments)*
+For when a function is given the wrong number of arguments. Prefer
+|ERROR(WrongType)| and |ERROR(BadValue)| when relevant.
+
+                                                       *ERROR(MissingFeature)*
+For use when this vim instance is missing support for necessary functionality,
+e.g. when a |has()| check fails or |v:servername| wasn't set.
+
+                                                              *ERROR(Failure)*
+For use in code that should never be reached. Should only be thrown to
+indicate there's a bug in the plugin, and should never be caught or declared
+with `@throws`.
+
+==============================================================================
+PYTHON                                                        *maktaba-python*
+
+Maktaba offers some utilities for using Python consistently in plugins and
+uses Python if available for a few of its own operations to improve
+behavior/performance.
+
+COMPATIBILITY
+Vim can be compiled without any Python support, with the Python 2 interface
+only, with the Python 3 interface, or with support for either (with lots of
+caveats). See |if_pyth.txt| for context.
+
+Maktaba maintains compatibility with both Python 2 and Python 3, and can help
+plugins built on Maktaba to work with both versions, but there are still some
+unavoidable corner cases to be aware of:
+  * Plugin authors need to use Python syntax and imports compatible with both
+    versions if they intend to support both versions. Maktaba can't magically
+    fix those kinds of incompatibilities for you.
+  * For executing Python statements, explicitly detecting the version and
+    invoking |:python| or |:python3| is still the best way (and see
+    |script-here| to avoid errors).
+  * Catching errors gets tricky. Python errors tend to surface as multiple
+    lines of exception with "Traceback" or other output above the actual
+    error, and the error types can vary (Maktaba does not attempt to catch and
+    canonicalize errors from the different implementations and fallbacks).
+  * For users who try to use |python-2-and-3|, Maktaba may break the tie and
+    trigger Python 3 to load, breaking plugins that subsequently try to use
+    Python 2 (because a single vim instance can't run both).
+
+
+vim:tw=78:ts=8:ft=help:norl:

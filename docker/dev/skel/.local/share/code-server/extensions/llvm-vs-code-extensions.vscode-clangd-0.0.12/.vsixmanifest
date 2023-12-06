@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity Language="en-US" Id="vscode-clangd" Version="0.0.12" Publisher="llvm-vs-code-extensions"/>
+    <DisplayName>vscode-clangd</DisplayName>
+    <Description xml:space="preserve">Clang Language Server</Description>
+    <Tags>C,C++,LSP,Clangd,LLVM,keybindings,c,cpp,objective-c,objective-cpp</Tags>
+    <Categories>Programming Languages,Linters,Snippets</Categories>
+    <GalleryFlags>Public</GalleryFlags>
+    <Badges></Badges>
+    <Properties>
+      <Property Id="Microsoft.VisualStudio.Code.Engine" Value="^1.30.0" />
+      <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value="" />
+      <Property Id="Microsoft.VisualStudio.Code.ExtensionPack" Value="" />
+      <Property Id="Microsoft.VisualStudio.Code.LocalizedLanguages" Value="" />
+      
+        <Property Id="Microsoft.VisualStudio.Services.Links.Source" Value="http://llvm.org/svn/llvm-project/clang-tools-extra/trunk/clangd/clients/clangd-vscode/" />
+        <Property Id="Microsoft.VisualStudio.Services.Links.Getstarted" Value="http://llvm.org/svn/llvm-project/clang-tools-extra/trunk/clangd/clients/clangd-vscode/" />
+        
+          <Property Id="Microsoft.VisualStudio.Services.Links.Repository" Value="http://llvm.org/svn/llvm-project/clang-tools-extra/trunk/clangd/clients/clangd-vscode/" />
+        
+      
+      
+      <Property Id="Microsoft.VisualStudio.Services.Links.Learn" Value="https://clang.llvm.org/extra/clangd.html" />
+      
+      
+      <Property Id="Microsoft.VisualStudio.Services.GitHubFlavoredMarkdown" Value="true" />
+      
+      
+    </Properties>
+    <License>extension/LICENSE.txt</License>
+    
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Code"/>
+  </Installation>
+  <Dependencies/>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true" /><Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE.txt" Addressable="true" />
+  </Assets>
+</PackageManifest>

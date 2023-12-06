@@ -1,0 +1,9 @@
+{
+  "name": "glaive",
+  "description": "Global Setting Avoidance.",
+  "author": "Google",
+  "repository": {"type": "git", "url": "git://github.com/google/vim-glaive"},
+  "dependencies": {
+    "maktaba": {"type": "git", "url": "git://github.com/google/vim-maktaba"}
+  }
+}

@@ -1,0 +1,84 @@
+This file demonstrates hooks for automatically formatting code on save.
+If you aren't familiar with basic codefmt usage yet, see main.vroom first.
+
+We'll set up codefmt and configure the vroom environment, then jump into some
+examples.
+
+  :source $VROOMDIR/setupvroom.vim
+
+  :call codefmt#SetWhetherToPerformIsAvailableChecksForTesting(0)
+
+
+By default, nothing special happens when you save a buffer.
+
+  % void f() {int i; SomeFunction(parameter,// comment<CR>
+  |i);}
+
+  :doautocmd BufWritePre
+  void f() {int i; SomeFunction(parameter,// comment
+  i);}
+  @end
+
+
+
+You can use the AutoFormatBuffer command to enable automatic code formatting
+when you save the current buffer. This combined with vim autocommands gives you
+the flexibility to automatically format certain buffers based on path, filetype,
+or whatever conditions you want to trigger on.
+
+  :AutoFormatBuffer clang-format
+  % void f() {int i; SomeFunction(parameter,// comment<CR>
+  |i);}
+
+  :doautocmd BufWritePre
+  ! clang-format --version .*
+  $ clang-format version 3.3.0 (tags/testing)
+  ! clang-format .*
+  $ void f() {
+  $   int i;
+  $   SomeFunction(parameter,  // comment
+  $                i);
+  $ }
+  void f() {
+    int i;
+    SomeFunction(parameter,  // comment
+                 i);
+  }
+  @end
+
+Subsequent :FormatCode and :FormatLines invocations will also default to this
+same formatter.
+
+  :FormatCode
+  ! clang-format .*
+  $ void f() {
+  $   int i;
+  $   SomeFunction(parameter,  // comment
+  $                i);
+  $ }
+
+You can disable it for the current buffer with :NoAutoFormatBuffer. After that,
+the buffer will go back to doing nothing special when you save.
+
+  :%delete
+  :NoAutoFormatBuffer
+  % void f() {int i; SomeFunction(parameter,// comment<CR>
+  |i);}
+
+  :doautocmd BufWritePre
+  void f() {int i; SomeFunction(parameter,// comment
+  i);}
+  @end
+
+
+
+If you don't specify an explicit formatter as an argument to :AutoFormatBuffer,
+the default for the current buffer will be used.
+
+  :set filetype=go
+  :AutoFormatBuffer
+  % f()
+
+  :doautocmd BufWritePre
+  ! gofmt .*
+  $ f()

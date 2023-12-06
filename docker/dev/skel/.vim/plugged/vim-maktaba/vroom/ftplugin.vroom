@@ -1,0 +1,103 @@
+First things first: We install maktaba, as usual.
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+We're going to be playing with filetype plugins. By default vim has filetype
+detection disabled.
+
+  :call maktaba#ensure#IsFalse(maktaba#filetype#IsEnabled())
+
+We begin by telling vim that we care about ftplugin, indent, and syntax files:
+
+  :filetype plugin indent on
+  :syntax on
+
+  :call maktaba#ensure#IsTrue(maktaba#filetype#IsEnabled())
+
+Now we're going to install a fake filetype plugin.
+
+  :let g:testdir = fnamemodify($VROOMFILE, ':h')
+  :let g:pluginpath = maktaba#path#Join([g:testdir, 'fakeplugins', 'ftplugin'])
+  :let g:ftplugin = maktaba#plugin#Install(g:pluginpath)
+
+This plugin defines a ".newtype" filetype. But because we installed the plugin
+after vim's normal load phase, the plugin is not yet loaded. Let's load it.
+
+  @messages (STRICT)
+  :call g:ftplugin.Load()
+  ~ Plugin files sourced.
+  @messages
+
+Plugin files have been sourced, but unfortunately, the filetype detection files
+have not been noticed. If we edit a .newtype file, nothing happens:
+
+  @messages (STRICT)
+  :e file.newtype
+  @messages
+
+We have to load filetype files in a separate phase. Why doesn't the Load
+function handle this automatically? The answer is somewhat technical: loading
+new filetypes involves wiping out all filetype detection (and all syntax
+highlighting, and all indent code, and so on) and reloading EVERYTHING from
+scratch. This is just the way vim does things: it's a very global operation. If
+you're loading a whole bunch of plugins then you only want to reload filetype
+data once at the very end.
+
+Maktaba provides a function to help with this, but it is a global function (not
+a plugin function). It's known as maktaba#filetype#Cycle:
+
+  @messages (STRICT)
+  :call maktaba#filetype#Cycle()
+  ~ newtype detection enabled.
+  @messages
+
+Detection has been enabled for the 'newtype' filetype. The next time you edit
+a .newtype file, it will have ftplugin/indent/syntax files sourced:
+
+  :tabedit second.newtype
+  ~ Initializing buffer for newtype file.
+  ~ Setting up indent rules for newtype file.
+  ~ Applying syntax highlighting to newtype file.
+
+As you may have noticed, however, filetype#Cycle didn't trigger filetype
+detection on our original file. We can tell maktaba to re-trigger filetype
+detection on existing buffers by passing the 'reload' flag to the function:
+
+  :call maktaba#filetype#Cycle(1)
+  ~ newtype detection enabled.
+  ~ Initializing buffer for newtype file.
+  ~ Setting up indent rules for newtype file.
+  ~ Applying syntax highlighting to newtype file.
+  ~ Initializing buffer for newtype file.
+  ~ Setting up indent rules for newtype file.
+  ~ Applying syntax highlighting to newtype file.
+
+But be warned that this can be somewhat invasive: it causes a flicker in all
+buffers.
+
+If you're writing a plugin manager, you should call this function only if the
+normal vim plugin phase is completed (i.e. vimrc-load-time is long past). This
+function should be called once after each batch of late-loaded plugins. There's
+a helper function to help streamline things a little bit. It's somewhat
+self-explanatory:
+
+  :call maktaba#ensure#IsTrue(g:ftplugin.HasFiletypeData())
+
+Empty plugins don't have filetype data, of course.
+
+  :let g:empath = maktaba#path#Join([g:testdir, 'fakeplugins', 'emptyplugin'])
+  :let g:emptyplugin = maktaba#plugin#Install(g:empath)
+  :call maktaba#ensure#IsFalse(g:emptyplugin.HasFiletypeData())
+
+In practice, you may want to cycle filetypes after each late plugin
+installation, with code looking something like this:
+
+01  if l:islate
+02    call l:plugin.Load()
+03    if l:plugin.HasFiletypeData()
+04      call maktaba#filetype#Cycle()
+05    endif
+06  endif

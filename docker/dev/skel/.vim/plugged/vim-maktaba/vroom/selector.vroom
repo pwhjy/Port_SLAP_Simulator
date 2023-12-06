@@ -1,0 +1,98 @@
+Maktaba includes a selector utility to help plugin authors launch a window to
+choose one of several options.
+
+Before we dive in, let's get maktaba installed:
+
+  @system (STRICT)
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+First, define what functions will be closed when various keys are hit.
+
+  :function HandleClose(line, ...)<CR>
+  |  echomsg "Close " . a:line<CR>
+  |endfunction
+  :function HandleNoOp(line, ...)<CR>
+  |  echomsg "NoOp " . a:line<CR>
+  |endfunction
+  :function HandleReturn(line, ...)<CR>
+  |  echomsg "Return " . a:line<CR>
+  |endfunction
+  :let g:example_keys = {}
+  :let g:example_keys.c = ['HandleClose', 'Close', 'Echomsg and Close']
+  :let g:example_keys.n = ['HandleNoOp', 'NoOp', 'Echomsg and NoOp']
+  :let g:example_keys.r = ['HandleReturn', 'Return', 'Echomsg and Return']
+
+Next, define the function that controls syntax highlighting for the new buffer.
+
+  :function HandleResetSyntax() abort<CR>
+  |  syn match dirpart '\([^/]*/\)\+'<CR>
+  |  syn match filepart '\([^./]\+\)\(\.\|$\)'<CR>
+  |  syn match extension '\.\@<=[a-z]*$'<CR>
+  |  hi def link dirpart Directory<CR>
+  |  hi def link filepart Type<CR>
+  |  hi def link extension Special<CR>
+  |endfunction
+
+Let's put some text in the default buffer so we can tell when we switch between
+buffers easily.
+
+  % Default buffer
+  Default buffer
+  @end
+
+
+Now we can use maktaba#selector#Create to create a new buffer with multiple
+lines that can be selected.
+
+  :let g:lines = ["one/one.1", "two/two.2", "three/three.3"]
+  :let g:selector = maktaba#selector#Create(g:lines)
+  |.WithMappings(g:example_keys).WithSyntax(function('HandleResetSyntax'))
+  |.WithName('Window_Name')
+  |.Show()
+  " Press 'H' for more options.
+  one/one.1
+  two/two.2
+  three/three.3
+  @end
+
+
+Now we will try running the NoOp handler on the second line.
+
+  :normal j
+  :normal n
+  ~ NoOp two/two.2
+  " Press 'H' for more options.
+  one/one.1
+  two/two.2
+  three/three.3
+  @end
+
+
+Try running the Return handler on the third line.
+
+  :normal j
+  :normal r
+  ~ Return three/three.3
+  Default buffer
+  @end
+
+
+Lets go back to the selector window and then try running the close handler.
+
+  :wincmd j
+  " Press 'H' for more options.
+  one/one.1
+  two/two.2
+  three/three.3
+  @end
+  :normal c
+  ~ Close three/three.3
+  Default buffer
+  @end
+
+
+

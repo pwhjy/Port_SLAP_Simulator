@@ -1,0 +1,68 @@
+As always, we have to start by installing maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Vroom provides simple enum types.
+
+  :let g:animals = maktaba#enum#Create(['CAT', 'DOG', 'DUCK', 'PIG'])
+
+By default, they are ordered by index, starting at zero.
+
+  :echomsg g:animals.DUCK
+  ~ 2
+
+You may also create an enum from a dictionary with custom values.
+
+  :let g:birds = maktaba#enum#Create({'DUCK': 'Yes', 'PENGUIN': 'Definitely.'})
+  :echomsg g:birds.DUCK
+  ~ Yes
+
+All names must be uppercase.
+
+  :let g:newenum = maktaba#function#Create('maktaba#enum#Create')
+  :call maktaba#error#Try(g:newenum.WithArgs(['trombone']))
+  ~ ERROR(BadValue): Invalid enum name: trombone. Enum names must be uppercase.
+
+Enums come with methods to get at their names, sorted by the natural order of
+their values,
+
+  :echomsg string(g:birds.Names())
+  ~ ['PENGUIN', 'DUCK']
+
+their values (sorted by natural order):
+
+  :echomsg string(g:animals.Values())
+  ~ [0, 1, 2, 3]
+
+individual names:
+
+  :echomsg g:animals.Name(0)
+  ~ CAT
+
+and individual values:
+
+  :echomsg g:animals.Value('DOG')
+  ~ 1
+
+Note that these last two functions throw NotFound errors on failure.
+
+  :let g:namer = maktaba#function#Method(g:animals, 'Name')
+  :call maktaba#error#Try(g:namer.WithArgs(10))
+  ~ ERROR(NotFound): Enum name with value 10.
+
+  :let g:valuer = maktaba#function#Method(g:animals, 'Value')
+  :call maktaba#error#Try(g:valuer.WithArgs('WHEEL'))
+  ~ ERROR(NotFound): Enum name WHEEL.
+
+Using .Value is otherwise equivalent to accessing the name field directly.
+
+  :echomsg g:animals.DOG
+  ~ 1
+
+Enums may not be empty.
+
+  :call maktaba#error#Try(g:newenum.WithArgs([]))
+  ~ ERROR(BadValue): Enum must have at least one name.

@@ -1,0 +1,149 @@
+As always, we have to start by installing maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Maktaba provides some tools to manipulate the vim runtimepath. This is the path
+where plugins go. It's kept by vim in a comma-separated list, which can lead to
+some jankyness (especially if you have directories with commas in the name).
+
+The most important tools are tools to split and join the runtimepath.
+
+  :let &runtimepath .= ',/your/home/vim/directory,/some/system/vim/files,/etc'
+  :echomsg string(maktaba#rtp#Split()[-3:])
+  ~ ['/your/home/vim/directory/', '/some/system/vim/files/', '/etc/']
+
+  :let g:rejoined = maktaba#rtp#Join(maktaba#rtp#Split())
+  :call maktaba#ensure#IsEqual(&runtimepath, g:rejoined)
+
+maktaba#rtp uses a runtimepath cache, which makes splitting/joining the
+runtimepath faster if you don't modify it in between calls. Let's do a quick
+test that the cache invalidates correctly if you *do* change the runtimepath
+manually between calls:
+
+  :set runtimepath+=new/directory
+  :let g:rejoined = maktaba#rtp#Join(maktaba#rtp#Split())
+  :call maktaba#ensure#IsEqual(&runtimepath, g:rejoined)
+
+Good.
+
+maktaba#rtp#Split gracefully handles commas in directories:
+
+  :echomsg maktaba#rtp#Join(['/real/files', '/who/even/does,this'])
+  ~ /real/files,/who/even/does\,this
+  :echomsg maktaba#rtp#Split('/real/files,/who/even/does\,this')[1]
+  ~ /who/even/does,this/
+
+Though we still recommend that you never ever do this.
+
+
+
+Maktaba has a special function for adding directories to the runtimepath. This
+method adds files *second* on the runtimepath. By default, your runtimepath
+consists of your personal vim files followed by the system vim files. As a rule
+of thumb, plugins should come after your personal files but before the system
+files. Maktaba has no way of telling what directory is what in your runtimepath,
+so we just guess. If you want your runtimepath to be sorted differently, you
+should sort the list provided by maktaba#rtp#Split() and then re-combine it with
+maktaba#rtp#Join().
+
+  :let &runtimepath = '/your/files,' . g:maktabadir . ',/system/files'
+  :call maktaba#rtp#Add('/my/plugin')
+  :echomsg &runtimepath
+  ~ /your/files,/my/plugin,*maktaba*,/system/files (glob)
+
+Furthermore, if the directory that you add to the runtimepath has an 'after'
+subdirectory, that will be added second-to-last on your runtimepath. This is
+because your runtimepath is actually set up like this:
+
+  :let &runtimepath = '/your,' . g:maktabadir . ',/sysstuff,/your/after'
+
+The after directories are canonically in the reverse order. This means that the
+user stuff gets to run first, and the user after/ files get to run last: the
+user gets the first and last say in their configuration (as it should be).
+
+So when you add a directory that has an after directory, it will be added
+second-last:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':h')
+  :let g:repo = maktaba#path#Join([g:thisdir, 'fakeplugins'])
+  :let g:realplugin = maktaba#path#Join([g:repo, 'myplugin'])
+  :call maktaba#rtp#Add(g:realplugin)
+  :let g:secondlast = maktaba#rtp#Split()[-2]
+  :call maktaba#ensure#Matches(g:secondlast, '\Vfakeplugins/myplugin/after/\$')
+
+maktaba#rtp#Add will not add duplicate paths.
+
+  :call maktaba#rtp#Add('/your/cool/plugin')
+  :let g:rtpsave = &runtimepath
+  :call maktaba#rtp#Add('/your/cool/plugin')
+  :call maktaba#ensure#IsEqual(g:rtpsave, &runtimepath)
+
+
+
+You can also remove from the runtimepath.
+
+  :let g:save = &runtimepath
+  :call maktaba#rtp#Add('/some/weird/path')
+  :call maktaba#rtp#Remove('/some/weird/path')
+  :call maktaba#ensure#IsEqual(g:rtpsave, &runtimepath)
+
+All instances of the given path are removed.
+
+  :let g:rtpsave = &runtimepath
+  :set rtp+=/some/weird/path
+  :set rtp+=/some/weird/path
+  :call maktaba#rtp#Remove('/some/weird/path')
+  :call maktaba#ensure#IsEqual(g:rtpsave, &runtimepath)
+
+This function will not complain if the given path was not present.
+
+  :call maktaba#rtp#Remove('/path/that/is/not/present')
+
+
+
+If plugins are added to the runtimepath after vim has finished starting up, then
+the plugin will never be sourced. Maktaba plugins have machinery to make sure
+they load no matter when you install them, but sometimes you need to add
+a non-maktaba plugin to the runtimepath late. In that case, use
+maktaba#rtp#Load, which will both add the plugin to the runtimepath and source
+all its plugin/ files.
+
+  :call maktaba#rtp#Load(maktaba#path#Join([g:repo, 'loudplugin']))
+  ~ PLUGIN LOADED
+
+
+Finally, there's a pair of utility functions to check the directory names of
+files on the runtimepath.
+
+  :let &runtimepath = g:maktabadir . ',plugins/one,plugins/two/,plugins/three'
+  :let g:maktaba_dirname = maktaba#path#Split(g:maktabadir)[-1]
+  :let g:leafdirs = sort([g:maktaba_dirname, 'one', 'two', 'three'])
+  :call maktaba#ensure#IsEqual(g:leafdirs, sort(keys(maktaba#rtp#LeafDirs())))
+
+The actual return value of maktaba#rtp#LeafDirs is a dictionary mapping each
+leaf directory to the containing directory. This can be useful for people trying
+to manage plugins (or find plugin files).
+
+  :echomsg maktaba#rtp#LeafDirs()['one']
+  ~ plugins/one/
+
+As a shortcut, you can use maktaba#rtp#HasLeafDir to check whether a specific
+directory is a leaf directory on the runtimepath.
+
+  :call maktaba#ensure#IsTrue(maktaba#rtp#HasLeafDir('three'))
+  :call maktaba#ensure#IsFalse(maktaba#rtp#HasLeafDir('four'))
+
+Certain leaf directories are ignored. These are mostly directories that hold
+special vim files (instead of plugins). See the documentation of
+maktaba#rtp#LeafDirs for details.
+
+  :let &runtimepath = '/home/you/.vim,/home/you/.vim/runtime,/a/real/plugin,' .
+  | g:maktabadir
+  :let g:leafdirs = sort(['plugin', g:maktaba_dirname])
+  :call maktaba#ensure#IsEqual(g:leafdirs, sort(keys(maktaba#rtp#LeafDirs())))
+
+This can be useful for guessing whether or not a plugin is installed. Note,
+however, that not every runtimepath directory is a plugin.

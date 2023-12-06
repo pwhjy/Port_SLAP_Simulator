@@ -1,0 +1,61 @@
+As always, we have to start by installing maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Now we need to tell maktaba#system that vroom's fake shell is an acceptable
+shell to use. (Otherwise it will ignore $SHELL and use sh).
+
+  :call maktaba#system#SetUsableShellRegex('\v<shell\.vroomfaker$')
+
+Now we're ready to talk about the maktaba#user functions.
+
+maktaba#user#Name gets the username:
+
+  :echomsg maktaba#user#Name()
+  ! whoami * (glob)
+  $ your mother
+  ~ your mother
+
+A few other functions can be used to grab the user's preferred configuration,
+data, and cache directories. These functions all respect the XDG specifications.
+
+For this test to work we need to override #MakeDirectory:
+
+  :function FakeDirectory(...) abort
+  :  return 1
+  :endfunction
+  :call maktaba#test#Override('maktaba#path#MakeDirectory', 'FakeDirectory')
+
+Now let's use the XDG environment variables to specify the directories we want
+to use.
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let $XDG_CONFIG_HOME = maktaba#path#Join([g:thisdir, 'my/config'])
+  :let $XDG_CACHE_HOME = maktaba#path#Join([g:thisdir, 'my/cache'])
+  :let $XDG_DATA_HOME = maktaba#path#Join([g:thisdir, 'my/local/share'])
+
+  :let g:confhome = $XDG_CONFIG_HOME . '/vim'
+  :let g:cachehome = $XDG_CACHE_HOME . '/vim'
+  :let g:datahome = $XDG_DATA_HOME . '/vim'
+
+  :call maktaba#ensure#IsEqual(maktaba#user#ConfigDir(), g:confhome)
+  :call maktaba#ensure#IsEqual(maktaba#user#CacheDir(), g:cachehome)
+  :call maktaba#ensure#IsEqual(maktaba#user#DataDir(), g:datahome)
+
+If the user specifications are missing, these functions default as you might
+expect:
+
+  :let $XDG_CONFIG_HOME = ''
+  :let $XDG_CACHE_HOME = ''
+  :let $XDG_DATA_HOME = ''
+
+  :let g:confhome = $HOME . '/.vim'
+  :let g:cachehome = $HOME . '/.vim/cache'
+  :let g:datahome = $HOME . '/.vim/data'
+
+  :call maktaba#ensure#IsEqual(maktaba#user#ConfigDir(), g:confhome)
+  :call maktaba#ensure#IsEqual(maktaba#user#CacheDir(), g:cachehome)
+  :call maktaba#ensure#IsEqual(maktaba#user#DataDir(), g:datahome)

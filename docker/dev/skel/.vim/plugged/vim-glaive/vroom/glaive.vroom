@@ -1,0 +1,179 @@
+Global plugin settings are a soul-rending, albeit heretofore necessary, evil.
+They're global, for one thing: you've got to remeber to confine them to ad-hoc
+namespaces. There's no way to enforce consistency in naming: Sooner or later you
+have to set g:SomePluginsCamelCasedSetting, g:inconsistent_under_scores,
+g:too_trse, or g:settings_named_such_that_they_barely_fit_on_one_line.
+
+The atrocities committed by global settings are not limited to violations of
+aesthetic sensibilities. Global settings are also brittle. Imagine you've
+written a plugin that has a configuration option specifying a list of
+directories. Maybe you initialize the variable like this:
+
+01 if !exists('g:myplugin_searched_directories')
+02   let g:myplugin_searched_directories = ['/first', '/second']
+03 endif
+
+The user can modify which directories are searched by modifying this global
+variable, right? Well, no. See, your code lives in a plugin/ directory
+somewhere, and the user configures your plugin via their .vimrc file, and their
+vimrc runs before your global setting is defined. They can *override* your list,
+but they cannot extend it. Global settings are hobbled. This makes it difficult
+for plugin authors to provide robust defaults for complex configuraitons, and
+frustrating for users who just want to tweak the defaults.
+
+Last but not least, global settings are opaque to both developers and users.
+Which global settings can be set on the fly? Plugin authors have no way of
+listening for changes to global settings, and users have no confidence that
+changing global settings will affect plugin behavior after vimrc time.
+
+All of these problems are addressed in maktaba plugins. Maktaba plugins use
+flags, which are defined the moment a plugin is installed. Maktaba flags are not
+global variables. You can attach callback functions to them. You can attach
+functions that scrub and normalize the user input. You can subvert all of the
+problems mentioned above.
+
+And best of all, if your plugin uses maktaba flags, users have access to the
+:Glaive command which can be used to configure your plugin in an aesthetically
+pleasing manner. Let's have an example, shall we?
+
+In order for these tests to work, maktaba MUST be in the same directory as
+glaive. Given that that's the case, all we have to do is source the glaive
+bootstrap file.
+
+  :set nocompatible
+  :let g:glaivedir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:glaivedir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Then we can install a plugin full of flags:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+You can go browse through fakeplugins/fullplugin if you like: It defines
+a bunch of flags: empty, number, float, string, list, and dict. I bet you can't
+guess what type of data each contains.
+
+  :echomsg string(g:plugin.Flag('dict'))
+  ~ {}
+
+Right now all the flags are empty (or zero, or whatever). We configure the flags
+with the Glaive command:
+
+  :Glaive fullplugin number=8 list=one,two,three dict=key1:val1,key2:val2
+
+That one little line tells you most of what you need to know about Glaive. You
+give it the name of a plugin and a bunch of settings, and it sets the
+appropriate flags for you.
+
+  :echomsg g:plugin.Flag('number')
+  ~ 8
+
+  :echomsg string(g:plugin.Flag('list'))
+  ~ ['one', 'two', 'three']
+
+  :echomsg g:plugin.Flag('dict') == {'key1': 'val1', 'key2': 'val2'}
+  ~ 1
+
+Notice that Glaive uses an intuitive sort of syntax. Before I describe it in
+full, let me show you a few more examples:
+
+  :Glaive fullplugin dict[key1]=huh
+  :echomsg g:plugin.Flag('dict').key1
+  ~ huh
+
+  :Glaive fullplugin string="one,two,three"
+  :echomsg g:plugin.Flag('string')
+  ~ one,two,three
+
+Now, before you get too confused, note that Glaive does not preserve flag types.
+Just because I've named a flag 'string' does not mean it must always be
+a string: nobody will complain if I set the flag to a list.
+
+  :Glaive fullplugin string=one,two,three
+  :echomsg string(g:plugin.Flag('string'))
+  ~ ['one', 'two', 'three']
+
+But that makes me uncomfortable, so I'll change it back.
+
+  :Glaive fullplugin string="Phew."
+
+One or two more examples before I explain the syntax in detail:
+
+  :Glaive fullplugin number+=2 string$=" That was exhausting."
+  :echomsg g:plugin.Flag('number')
+  ~ 10
+  :echomsg g:plugin.Flag('string')
+  ~ Phew. That was exhausting.
+
+  :Glaive fullplugin dict=`{'complex': ['nested', {'data': 'structure'}]}`
+  :echomsg string(g:plugin.Flag('dict'))
+  ~ {'complex': ['nested', {'data': 'structure'}]}
+
+  :Glaive fullplugin ~empty
+  :echomsg g:plugin.Flag('empty')
+  ~ 1
+
+
+All right. Let's make the rules explicit. You call the Glaive command with the
+name of a plugin followed by any number of Glaive settings. Each Glaive setting
+consists of four parts:
+
+1. NAME
+2. FOCI
+3. OPERATOR
+4. VALUE
+
+The NAME must specify a flag. This is perhaps the simplest part of the setting,
+and is the only part of the setting that is required.
+
+The FOCI are a series of keys or indices in square brackes, for example
+[outerkey][innerkey][0]. These are used to set a specific part of a complex
+flag: for example, this allows you to set only one key of a dictionary flag.
+
+The OPERATOR specifies how the flag is changed. There are seven available
+operators.  Two operators are unary operations and must appear BEFORE the flag:
+
+| !   The (!) operator sets the flag to zero.
+|
+| ~   The (~) operator inverts a numeric flag, setting it to 1 if it is zero or
+|     0 if it is non-zero.
+|
+| =   The (=) operator just sets the flag to the value. No funny business.
+|
+| +=  The (+=) operator can be used to add to numbers, append to strings, extend
+|     lists, or merge dictionaries.
+|
+| -=  The (-=) operator can be used to subtract from numbers, remove items from
+|     lists, or remove keys from dictionaries.
+|
+| ^=  The (^=) operator may be used to prepend to strings.
+|
+| $=  The ($=) operator may be used to append to strings.
+|
+| `=  The (`=) operator sets the flag to the result of calling the given value
+|     (which must be the name of a function that takes a single variable) with
+|     the current flag value.
+
+If you omit the operator then you MUST omit the value. If you omit the operator,
+the flag will be set to 1.
+
+Finally, the VALUE is parsed according to the following rules, in order:
+
+1. Vimscript strings (singly and doubly quoted) are treated as strings.
+2. Anything in backticks is evaluated immediately to determine the value.
+3. If the value contains a colon, it is treated as a dictionary (see below).
+4. If the value contains a comma it is treated as a list (see below).
+5. If the value contains only digits it is a number.
+6. If the value contains only digits and a single decimal place, it is a float.
+7. The value is treated as a string.
+
+There are too many corner cases for this test file to adequately cover, so
+please see the following files for more in-depth tests:
+
+glaivenumbers.vroom
+glaivefloats.vroom
+glaivestrings.vroom
+glaivelists.vroom
+glaivedicts.vroom

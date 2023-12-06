@@ -1,0 +1,16 @@
+{
+  "languageserver": {
+    "clangd": {
+      "command": "clangd",
+      "args": ["-clang-tidy", "--header-insertion=never"],
+      "rootPatterns": ["compile_flags.txt", "WORKSPACE*", "CMakeList.txt"],
+      "filetypes": ["c", "cpp", "objc", "objcpp"]
+    }
+  },
+  "diagnostic.virtualText": false,
+  "diagnostic.errorSign": "✖",
+  "diagnostic.warningSign": "⚠",
+  "diagnostic.infoSign": "!",
+  "diagnostic.hintSign": "➤",
+  "diagnostic.checkCurrentLine": true
+}

@@ -1,0 +1,271 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "description": "微信小程序 app.json 的 schema",
+  "type": "object",
+  "definitions": {
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "页面路径"
+      },
+      "uniqueItems": true,
+      "description": "每一项都是字符串，来指定小程序由哪些页面组成，数组的第一项代表小程序首页"
+    }
+  },
+  "properties": {
+    "pages": {
+      "$ref": "#/definitions/pages"
+    },
+    "window": {
+      "type": "object",
+      "properties": {
+        "navigationBarBackgroundColor": {
+          "type": "string",
+          "default": "#000000",
+          "description": "导航栏背景颜色，HexColor"
+        },
+        "navigationBarTextStyle": {
+          "type": "string",
+          "description": "导航栏标题颜色，仅支持 black/white",
+          "default": "white",
+          "enum": [
+            "white",
+            "black"
+          ]
+        },
+        "navigationBarTitleText": {
+          "type": "string",
+          "description": "导航栏标题文字内容"
+        },
+        "navigationStyle": {
+          "type": "string",
+          "enum": [
+            "default",
+            "custom"
+          ],
+          "default": "default",
+          "description": "导航栏样式,微信客户端 6.6.0"
+        },
+        "backgroundColor": {
+          "type": "string",
+          "default": "#ffffff",
+          "description": "窗口的背景色， HexColor"
+        },
+        "backgroundTextStyle": {
+          "type": "string",
+          "default": "dark",
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "description": "下拉背景字体、loading 图的样式，仅支持 dark/light"
+        },
+        "backgroundColorTop": {
+          "type": "string",
+          "description": "顶部窗口的背景色，仅 iOS 支持,微信客户端 6.5.16",
+          "default": "#ffffff"
+        },
+        "backgroundColorBottom": {
+          "type": "string",
+          "description": "底部窗口的背景色，仅 iOS 支持微信客户端 6.5.16",
+          "default": "#ffffff"
+        },
+        "enablePullDownRefresh": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否开启下拉刷新"
+        },
+        "onReachBottomDistance": {
+          "type": "number",
+          "default": 50,
+          "description": "页面上拉触底事件触发时距页面底部距离，单位为px"
+        },
+        "pageOrientation": {
+          "type": "string",
+          "description": "屏幕旋转设置,2.4.0 (auto) / 2.5.0 (landscape)",
+          "default": "portrait",
+          "enum": [
+            "auto",
+            "portrait",
+            "landscape"
+          ]
+        }
+      },
+      "description": "全局的默认窗口表现"
+    },
+    "tabBar": {
+      "type": "object",
+      "required": [
+        "color",
+        "selectedColor",
+        "backgroundColor",
+        "list"
+      ],
+      "default": {
+        "color": "",
+        "selectedColor": "",
+        "backgroundColor": "",
+        "list": []
+      },
+      "properties": {
+        "color": {
+          "type": "string",
+          "description": "tab 上的文字默认颜色"
+        },
+        "selectedColor": {
+          "type": "string",
+          "description": "tab 上的文字选中时的颜色"
+        },
+        "backgroundColor": {
+          "type": "string",
+          "description": "tab 的背景色"
+        },
+        "borderStyle": {
+          "type": "string",
+          "enum": [
+            "black",
+            "white"
+          ],
+          "default": "black",
+          "description": "tabbar上边框的颜色， 仅支持 black/white"
+        },
+        "position": {
+          "type": "string",
+          "default": "bottom",
+          "enum": [
+            "bottom",
+            "top"
+          ],
+          "description": "可选值 bottom、top"
+        },
+        "list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "pagePath",
+              "text"
+            ],
+            "properties": {
+              "pagePath": {
+                "type": "string",
+                "description": "页面路径，必须在 pages 中先定义"
+              },
+              "text": {
+                "type": "string",
+                "description": "tab 上按钮文字"
+              },
+              "iconPath": {
+                "type": "string",
+                "description": "图片路径，icon 大小限制为40kb，建议尺寸为 81px * 81px，当 postion 为 top 时，此参数无效，不支持网络图片"
+              },
+              "selectedIconPath": {
+                "type": "string",
+                "description": "选中时的图片路径，icon 大小限制为40kb，建议尺寸为 81px * 81px ，当 postion 为 top 时，此参数无效"
+              }
+            }
+          },
+          "minItems": 2,
+          "maxItems": 5
+        }
+      },
+      "description": "底部 tab 栏的表现"
+    },
+    "networkTimeout": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "number",
+          "default": 60000,
+          "description": "wx.request的超时时间，单位毫秒，默认为：60000"
+        },
+        "connectSocket": {
+          "type": "number",
+          "default": 60000,
+          "description": "wx.connectSocket的超时时间，单位毫秒，默认为：60000"
+        },
+        "uploadFile": {
+          "type": "number",
+          "default": 60000,
+          "description": "wx.uploadFile的超时时间，单位毫秒，默认为：60000"
+        },
+        "downloadFile": {
+          "type": "number",
+          "default": 60000,
+          "description": "wx.downloadFile的超时时间，单位毫秒，默认为：60000"
+        }
+      },
+      "description": "网络超时时间"
+    },
+    "debug": {
+      "type": "boolean",
+      "description": "可以在开发者工具中开启 debug 模式，在开发者工具的控制台面板，调试信息以 info 的形式给出，其信息有Page的注册，页面路由，数据更新，事件触发 。 可以帮助开发者快速定位一些常见的问题"
+    },
+    "functionalPages": {
+      "type": "boolean",
+      "description": "是否启用插件功能页",
+      "default": false
+    },
+    "subPackages": {
+      "type": "array",
+      "description": "分包加载",
+      "items": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string",
+            "description": "指定分包的名称，对应会自动生成一个文件夹"
+          },
+          "pages": {
+            "$ref": "#/definitions/pages"
+          }
+        }
+      }
+    },
+    "requiredBackgroundModes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "台运行的能力",
+        "enum": [
+          "audio"
+        ]
+      },
+      "description": "申明需要后台运行的能力，类型为数组",
+      "uniqueItems": true
+    },
+    "plugins": {
+      "type": "object",
+      "default": {},
+      "description": "引入插件代码包",
+      "properties": {}
+    },
+    "resizable": {
+      "type": "boolean",
+      "description": "iPad 小程序是否支持屏幕旋转",
+      "default": false
+    },
+    "navigateToMiniProgramAppIdList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "对应appid"
+      },
+      "description": "需要跳转的小程序列表"
+    },
+    "usingComponents": {
+      "type": "object",
+      "properties": {},
+      "description": "全局自定义组件配置"
+    },
+    "permission": {
+      "type": "object",
+      "properties": {},
+      "description": "小程序接口权限相关设置,微信客户端 7.0.0"
+    }
+  },
+  "required": [
+    "pages"
+  ]
+}

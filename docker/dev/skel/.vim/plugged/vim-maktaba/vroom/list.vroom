@@ -1,0 +1,64 @@
+As always, we must install maktaba before we can test it:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Maktaba provides a few simple list utilities. In keeping with vimscript's
+existing list functions, maktaba list operations are in-place: the original list
+will be modified.
+
+
+
+For example, here's the maktaba#list#RemoveItem function, which removes the
+first occurrence of an item from a list.
+
+  :let g:list = [3, 1, 2, 1]
+  :call maktaba#list#RemoveItem(g:list, 1)
+  :echomsg string(g:list)
+  ~ [3, 2, 1]
+
+This function differs from vim's remove(), which removes items at a given index.
+An error is thrown if the item is not in the list:
+
+  :let g:rmitem = maktaba#function#Create('maktaba#list#RemoveItem')
+  :call maktaba#error#Try(g:rmitem.WithArgs(g:list, 0))
+  ~ ERROR(NotFound): Item 0 in list [3, 2, 1]
+
+The modified list is returned for convenience.
+
+  :call maktaba#ensure#IsEqual(maktaba#list#RemoveItem(g:list, 3), g:list)
+
+
+
+The maktaba#list#RemoveAll function is similar, but removes all occurrences of
+an item in the list.
+
+  :let g:list = [3, 1, 2, 1]
+  :call maktaba#list#RemoveAll(g:list, 1)
+  :echomsg string(g:list)
+  ~ [3, 2]
+
+It does not error when the item is not in the list. It simply no-ops.
+
+  :call maktaba#list#RemoveAll(g:list, 0)
+  :echomsg string(g:list)
+  ~ [3, 2]
+
+It also returns the modified list for convenience.
+
+  :call maktaba#ensure#IsEqual(maktaba#list#RemoveAll(g:list, 3), g:list)
+
+
+
+The maktaba#list#RemoveDuplicates function works how you might expect:
+
+  :let g:list = [3, 1, 2, 1]
+  :call maktaba#list#RemoveDuplicates(g:list)
+  :echomsg string(g:list)
+  ~ [3, 1, 2]
+
+ and, of course, returns the list for convenience.
+
+  :call maktaba#ensure#IsEqual(maktaba#list#RemoveDuplicates(g:list), g:list)

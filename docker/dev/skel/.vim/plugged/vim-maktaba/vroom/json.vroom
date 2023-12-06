@@ -1,0 +1,130 @@
+Maktaba provides some simple functions to parse and format Vim values to JSON
+texts. These can parse and format numbers, strings, lists and dictionaries to
+their JSON equivalents.
+
+These functions are provided in Vimscript and Python versions.  The Python
+versions are faster but depend upon a version of Vim compiled with +python
+(currently version 7.3.1042 or later).
+
+This set of tests uses the Python versions if available.  See
+json-vimscript.vroom for the tests of the Vimscript versions.
+
+As always, we start by installing Maktaba.
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+
+
+We can start by formatting a variety of Vim values as JSON. Any Vim value other
+than a Funcref can be formatted as a JSON text.
+
+  :function CheckEqual(actual, expected) abort
+  :  return maktaba#ensure#IsEqual(a:expected, a:actual)
+  :endfunction
+
+  :call CheckEqual(maktaba#json#Format('Hello, world'), '"Hello, world"')
+  :call CheckEqual(maktaba#json#Format(42), '42')
+  :call CheckEqual(maktaba#json#Format(42.0), '42.0')
+  :call CheckEqual(maktaba#json#Format(0.0 / 0.0), 'NaN')
+  :call CheckEqual(maktaba#json#Format(1.0 / 0.0), 'Infinity')
+  :call maktaba#ensure#IsIn(maktaba#json#Format(-1.0 / 0.0),
+  | ['-Infinity', 'Infinity'])
+  :call CheckEqual(maktaba#json#Format([1, 2, 'foo']), '[1,2,"foo"]')
+  :let g:json = maktaba#json#Format({'foo': {'bar': 'baz'}})
+  :call CheckEqual(g:json, '{"foo":{"bar":"baz"}}')
+
+Note that all of these return a string.
+
+For strings, it properly escapes special characters like quote and newline.
+
+  :call CheckEqual(maktaba#json#Format("Foo'\"\nbar"), '"Foo''\"\nbar"')
+
+As Vim does not have a way of representing 'null' or the boolean values 'true',
+or 'false', these can be represented using sentinel values.
+
+  :call CheckEqual(maktaba#json#Format(maktaba#json#NULL), 'null')
+  :call CheckEqual(maktaba#json#Format(maktaba#json#TRUE), 'true')
+  :call CheckEqual(maktaba#json#Format(maktaba#json#FALSE), 'false')
+  :let g:json = maktaba#json#Format({'x': [maktaba#json#NULL, 1]})
+  :call CheckEqual(g:json, '{"x":[null,1]}')
+
+
+
+We can also parse any given JSON text to a Vim value.
+
+  :call CheckEqual(maktaba#json#Parse('"Hello, world"'), 'Hello, world')
+  :call CheckEqual(maktaba#json#Parse('42'), 42)
+  :call CheckEqual(maktaba#json#Parse('42.0'), 42.0)
+  :call CheckEqual(string(maktaba#json#Parse('NaN')), 'nan')
+  :let g:inf = 1.0 / 0.0
+  :call CheckEqual(maktaba#json#Parse('Infinity'), g:inf)
+  :call CheckEqual(maktaba#json#Parse('[]'), [])
+  :call CheckEqual(maktaba#json#Parse('[1,{},"foo"]'), [1, {}, 'foo'])
+  :call CheckEqual(maktaba#json#Parse('{}'), {})
+  :let g:dict = maktaba#json#Parse('{"foo":{"bar":"baz"}}')
+  :call CheckEqual(g:dict, {'foo': {'bar': 'baz'}})
+
+For strings, it properly interprets special characters like quote and newline.
+
+  :call CheckEqual(maktaba#json#Parse('"Foo''\"\nbar"'), "Foo'\"\nbar")
+
+Note that as Vim does not have a way of representing 'null' or the boolean
+values 'true', or 'false', these are normally represented as sentinel values.
+
+  :call CheckEqual(maktaba#json#Parse('null'), maktaba#json#NULL)
+  :call CheckEqual(maktaba#json#Parse('true'), maktaba#json#TRUE)
+  :call CheckEqual(maktaba#json#Parse('false'), maktaba#json#FALSE)
+  :let g:value = maktaba#json#Parse('[null,false]')
+  :call CheckEqual(g:value, [maktaba#json#NULL, maktaba#json#FALSE])
+  :let g:dict = maktaba#json#Parse('{"a":null,"b":true}')
+  :call CheckEqual(g:dict, {'a': maktaba#json#NULL, 'b': maktaba#json#TRUE})
+
+Since these sentinels may be inconvenient in some cases and it's hard to
+recursively replace them after the fact, maktaba#json#Parse provides a shortcut
+to replace these sentinels with any value you prefer in the returned value. Just
+pass a dictionary as the 2nd argument mapping primitives (in string form) to
+custom values.
+(In case you're wondering, string representations are used instead of the
+sentinels themselves since vimscript does not allow the sentinels to be used as
+dict keys.)
+
+  :call CheckEqual(maktaba#json#Parse('[null]', {'null': ''}), [''])
+
+Primitives that are not overridden will still be returned as sentinels.
+
+  :let g:dict = maktaba#json#Parse('{"a":true,"b":null}', {'true': 1})
+  :call CheckEqual(g:dict, {'a': 1, 'b': maktaba#json#NULL})
+
+This validates that your primitive names don't have typos.
+
+  :let g:parse = maktaba#function#Create('maktaba#json#Parse')
+  :call maktaba#error#Try(g:parse.WithArgs('', {'badname': ''}))
+  ~ ERROR(BadValue): Invalid JSON primitive name(s) in custom_values: badname
+
+
+
+Maktaba will throw an error if the input to maktaba#json#Parse() is not a
+string, or if it is not a valid JSON text.  Note that the precise text of the
+error may differ between the Vimscript and Python implementations, so we match
+against both below, in case we are running on a version of Vim that doesn't
+support the Python implementation.
+
+  :let g:parse = maktaba#function#Create('maktaba#json#Parse')
+  :call maktaba#error#Try(g:parse.WithArgs(0))
+  ~ ERROR(WrongType): Expected a string. Got a number.
+  :call maktaba#error#Try(g:parse.WithArgs('system("ls")'))
+  ~ ERROR\(BadValue\): Input is not valid JSON text(.|:.*) (regex)
+
+
+
+Maktaba will also throw an error if asked to format Vim values that cannot be
+represented in JSON.
+
+  :let g:format = maktaba#function#Create('maktaba#json#Format')
+  :call maktaba#error#Try(g:format.WithArgs(maktaba#function#Create('system')))
+  ~ ERROR\(BadValue\): (regex)
+  |( Value cannot be represented as JSON:.*|
+  | Funcdict for func 'system' cannot be represented as JSON.)

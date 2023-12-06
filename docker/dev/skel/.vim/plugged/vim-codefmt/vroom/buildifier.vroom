@@ -1,0 +1,119 @@
+The built-in buildifier formatter knows how to format Bazel BUILD and .bzl
+files.  If you aren't familiar with basic codefmt usage yet, see main.vroom
+first.
+
+We'll set up codefmt and configure the vroom environment, then jump into some
+examples.
+
+  :source $VROOMDIR/setupvroom.vim
+
+  :let g:repeat_calls = []
+  :function FakeRepeat(...)<CR>
+  |  call add(g:repeat_calls, a:000)<CR>
+  :endfunction
+  :call maktaba#test#Override('repeat#set', 'FakeRepeat')
+
+  :call codefmt#SetWhetherToPerformIsAvailableChecksForTesting(0)
+
+
+The buildifier formatter expects the buildifier executable to be installed on
+your system.
+
+  % foo_library(name = "foo", srcs = ["bar.js"],)
+  :FormatCode buildifier
+  ! buildifier .*
+  $ foo_library(
+  $     name = "foo",
+  $     srcs = ["bar.js"],
+  $ )
+
+The name or path of the buildifier executable can be configured via the
+buildifier_executable flag if the default of "buildifier" doesn't work.
+
+  :Glaive codefmt buildifier_executable='mybuildifier'
+  :FormatCode buildifier
+  ! mybuildifier .*
+  $ foo_library(
+  $     name = "foo",
+  $     srcs = ["bar.js"],
+  $ )
+  :Glaive codefmt buildifier_executable='buildifier'
+
+The bzl filetype will use the buildifier formatter by default. The path to the
+file being edited is passed to buildifier so that it can adjust to whether the
+file is a BUILD or .bzl file.
+
+  @clear
+  % foo_library(name = "foo", srcs = ["bar.js"],)
+
+  :silent file /foo/bar/BUILD
+  :set filetype=bzl
+  :FormatCode
+  ! buildifier -path /foo/bar/BUILD .*
+  $ foo_library(
+  $     name = "foo",
+  $     srcs = ["bar.js"],
+  $ )
+
+  :set filetype=
+
+Errors are reported using the quickfix list.
+
+  @clear
+  % #<CR>
+  % java_package(])
+
+  :FormatCode buildifier
+  ! buildifier .*2> (.*)
+  $ echo 'stdin:2:15: syntax error near ]' >\1 (command)
+  $ 1 (status)
+  #
+  java_package(])
+  @end
+  :echomsg line('.') . ',' . col('.')
+  ~ 2,15
+  :echomsg string(map(getqflist(),
+  |'v:val.lnum . "," . v:val.col . "," . v:val.text'))
+  ~ ['2,15,syntax error near ]']
+
+Note that if the file's path was passed to buildifier, error reports are in a
+slightly different format, prefixed with the filename we passed.
+
+  @clear
+  :silent file /foo/bar/BUILD
+  :set filetype=bzl
+  % load()
+
+  > go
+  :FormatCode
+  ! buildifier .*2> (.*)
+  $ echo '/foo/bar/BUILD:1:7: syntax error near )' >\1 (command)
+  $ 1 (status)
+  load()
+  @end
+
+We'll be on column 6 because there's no column 7. (Buildifier appears to always
+report one column past the actual error.)
+
+  :echomsg line('.') . ',' . col('.')
+  ~ 1,6
+  :echomsg string(map(getqflist(),
+  |'v:val.lnum . "," . v:val.col . "," . v:val.text'))
+  ~ ['1,7,syntax error near )']
+
+If there are no errors, then the quickfix list is (currently, see
+https://github.com/google/vim-codefmt/issues/58) left alone:
+
+  > godd
+  % load('@io_bazel_rules_go//proto:def.bzl','go_proto_library')
+  > go
+
+  :FormatCode
+  ! buildifier -path /foo/bar/BUILD .*
+  $ load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+  :echomsg line('.') . ',' . col('.')
+  ~ 1,1
+  :echomsg len(getqflist())
+  ~ 1
+  :set filetype=

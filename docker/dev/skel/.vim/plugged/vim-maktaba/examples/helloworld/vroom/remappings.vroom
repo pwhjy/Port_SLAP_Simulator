@@ -1,0 +1,35 @@
+This is a vroom file. It's executable documentation. Or you can think of it as
+very well-documented tests. See helloworld.vroom for a more thorough
+explanation.
+
+The helloworld plugin defines a few key mappings. See mappings.vroom for the
+basics. Here we're going to be configuring plugin[mappings] to give the mappings
+a custom prefix instead of the default "<Leader>H". Let's install helloworld and
+then get into the details.
+
+  :set nocompatible
+  :let g:helloworlddir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:helloworlddir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+This time we'll configure plugin[mappings] to have a custom prefix value before
+forcing the plugin files to load.
+
+  :let g:helloworld = maktaba#plugin#Get('helloworld')
+  :call g:helloworld.Flag('plugin[mappings]', ',E')
+
+  :call maktaba#LateLoad()
+
+Now the prefix for helloworld mappings has changed from "<Leader>H" to ",E". For
+the helloworld plugin, this means that it defines mappings ",Eh" and ",Eg" (as
+opposed to the default "<Leader>Hh" and "<Leader>Hg").
+
+  :execute 'norm' ',Eh'
+  ~ Hello, world!
+
+  :execute 'norm' ',Eg'
+  ~ Goodbye, world!
+
+You can configure this prefix to be anything you want, but of course you should
+check what vim normally does for those keys first to make sure you don't replace
+useful built-in mappings with your custom mappings.

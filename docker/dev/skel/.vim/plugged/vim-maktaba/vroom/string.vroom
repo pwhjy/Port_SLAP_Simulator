@@ -1,0 +1,65 @@
+Maktaba provides exactly one string utility, and it's one that we use quite
+often. Before we see it, let's install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+The function is maktaba#string#Strip which strips whitespace (including
+newlines) from both sides of a string. It works exactly as you'd expect it does.
+
+  :echomsg maktaba#string#Strip('string')
+  ~ string
+
+  :echomsg maktaba#string#Strip('  string  ')
+  ~ string
+
+  :echomsg maktaba#string#Strip(" it doesn't just replace spaces ")
+  ~ it doesn't just replace spaces
+
+  :echomsg maktaba#string#Strip("\n   but it does replace newlines\n")
+  ~ but it does replace newlines
+
+  :echomsg maktaba#string#Strip("\n \r  and carriage returns\n\r")
+  ~ and carriage returns
+
+You may also pass in a list of characters to be stripped. This works similarly
+to python's str.strip function.
+
+  :echomsg maktaba#string#Strip('0xDEADBEEF', "ABCDEF")
+  ~ 0x
+
+Here, it's important to note the difference between single quoted and double
+quoted strings. Remember that backslashes are LITERAL in single quoted strings.
+
+  :echomsg maktaba#string#Strip('	foot\', "\t")
+  ~ foot\
+  :echomsg maktaba#string#Strip('	foot\', '\t')
+  ~ ^Ifoo
+
+The functions maktaba#string#StripLeading and maktaba#string#StripTrailing work
+as you might expect:
+
+  :echomsg maktaba#string#StripLeading('ababcba', "ab")
+  ~ cba
+  :echomsg maktaba#string#StripTrailing('ababcba', "ab")
+  ~ ababc
+
+They default to stripping whitespace.
+
+  :echomsg '^' . maktaba#string#StripLeading('    white    ') . '$'
+  ~ ^white    $
+  :echomsg '^' . maktaba#string#StripTrailing('    space    ') . '$'
+  ~ ^    space$
+
+
+
+Also included are utility functions to check the beginnings and endings of
+strings.
+
+  :call maktaba#ensure#IsFalse(maktaba#string#StartsWith('Hello', 'Heaven'))
+  :call maktaba#ensure#IsTrue(maktaba#string#StartsWith('Hello', 'Hell'))
+
+  :call maktaba#ensure#IsFalse(maktaba#string#EndsWith('World', 'old'))
+  :call maktaba#ensure#IsTrue(maktaba#string#EndsWith('World', 'd'))

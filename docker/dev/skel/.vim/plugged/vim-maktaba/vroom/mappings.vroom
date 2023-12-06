@@ -1,0 +1,90 @@
+Please ignore me while I install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+and then install the modular plugin:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'modularplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+Man, I really should go implement some setup functionality into vroom.
+Anyway, Maktaba's policy with respect to key mappings is that plugin key
+mappings should always be opt-in. Maktaba can't really enforce this: the most it
+can do is prevent the mapping's file from being installed by default. For
+instance, if you try to load the 'mappings' file, nothing happens:
+
+  @messages (STRICT)
+  :call g:plugin.Load('mappings')
+  @messages
+
+Unless you have EXPLICITLY enabled mappings:
+
+  :call g:plugin.Flag('plugin[mappings]', 1)
+  :call g:plugin.Load('mappings')
+  ~ Ha ha ha, now your key presses belong to me!
+
+It worked that time.
+
+If you do provide mapping, maktaba has a few tips to make your key mappings more
+sanitary:
+
+1. ALWAYS USE <unique> WHEN MAKING MAPPINGS.
+|  This will make your mappings complain loudly when there's a conflict, instead
+|  of silently clobbering your user's existing mappings. Clobbering user
+|  mappings makes users sad. See :help map-<unique> for details.
+
+2. Use <Plug>{plugin} whenever possible.
+|  <Plug> is a map sequence that cannot be typed, but which can be mapped to. If
+|  you have complicated key mappings that are hard to replicate, but you don't
+|  know what keys the user wants to map them to, then you should use <Plug> to
+|  make the mappings available WITHOUT actually changing the user's mappings.
+|  For example:
+|
+|    :noremap <unique> <Plug>myplugin-stutter 6j5k4j3k2j1k
+|
+|  Now the user can execute <Plug>myplugin-stutter, which in turn executes
+|  6j5k4j3k2j1k.
+|
+|  Notice that everybody shares the <Plug> namespace. You should make sure that
+|  all of your plugs start with <Plug> followed by your plugin name in order to
+|  prevent collisions. USE OF <unique> IS RECOMMENDED IN PLUGS.
+|
+|  Plug mapping should live in plugs.vim instead of mappings.vim, as
+|  mappings.vim is opt-in only. Plug mappings, BUT NOT REGULAR MAPPINGS, should
+|  be enabled by default.
+
+3. If you really must define key mappings, then you should place them all under
+|  a SINGLE LETTER underneath the user's chosen mapleader. For example, if you
+|  are writing a sorting plugin, you should consider placing all mappings under
+|  <leader>s: <leader>su to sort up, <leader>sd to sort down, and so on. This at
+|  least limits the amount of damage you can do to the user's existing mappings.
+|  Ideally, you should do this in a way that's configurable by the user.
+
+Maktaba helps you adhere to the third option by providing a MapPrefix function.
+You give the function your preferred leader letter, and the user can override it
+with whatever they please.
+
+If the user has not expressed any preference with respect to the key mapping,
+then the MapPrefix function returns your favored letter (in the <leader> space):
+
+  :echomsg g:plugin.MapPrefix('p')
+  ~ <leader>p
+
+The user can override this, though. Perhaps their leader is \, but they want
+your plugin's mappings to be mapped under ',q' instead: They can express this by
+setting the plugin[mappings] flag to their preferred map prefix:
+
+  :call g:plugin.Flag('plugin[mappings]', ',q')
+
+Now when you ask for the map prefix, you'll get the prefix that the user
+desired.
+
+  :echomsg g:plugin.MapPrefix('p')
+  ~ ,q
+
+Note that according to the maktaba convention, the only way for your plugin to
+break out of the <leader> space is with explicit user consent.

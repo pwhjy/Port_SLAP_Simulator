@@ -1,0 +1,19 @@
+language: node_js
+
+node_js:
+  - node
+
+cache: npm
+
+install:
+  - npm install
+
+script:
+  # TODO(allevato): Add a prettier check to verify that *.ts files don't differ
+  # from their prettier output. We need `prettier-tslint` so that prettier will
+  # obey our tslint config, but it doesn't support Typescript 3 yet.
+  # (https://github.com/azz/prettier-tslint/issues/18)
+  - npm run check-lint
+
+notifications:
+  email: false

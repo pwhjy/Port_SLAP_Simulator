@@ -1,0 +1,113 @@
+This test file puts glaive strings through their paces. See glaive.vroom for an
+introduction to glaive syntax.
+
+Install glaive:
+
+  :set nocompatible
+  :let g:glaivedir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:glaivedir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Install a plugin:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+Define a string flag:
+
+  :call g:plugin.Flag('string', 'Hello, world!')
+
+Utility function for checking the string value:
+
+  :function! Is(value) abort
+  :  call maktaba#ensure#IsEqual(g:plugin.Flag('string'), a:value)
+  :endfunction
+
+
+Single quoted strings work as in vimscript:
+
+  :Glaive fullplugin string='Even with spaces!'
+  :call Is('Even with spaces!')
+  :Glaive fullplugin string='And ''escaped quotes'''
+  :call Is("And 'escaped quotes'")
+  :Glaive fullplugin string='Single quoted strings have \no escape characters.'
+  :call Is('Single quoted strings have \no escape characters.')
+
+Double quoted strings also work as in vimscript:
+
+  :Glaive fullplugin string="'Double quotes.'"
+  :call Is("'Double quotes.'")
+  :Glaive fullplugin string="Backslash \"escaping\""
+  :call Is('Backslash "escaping"')
+  :Glaive fullplugin string="Actual\tescape\tcharacters"
+  :call Is("Actual\tescape\tcharacters")
+
+You may also use backticks to evaluate expressions.
+
+  :Glaive fullplugin string=`substitute('foo', 'oo', 'eh', '')`
+  :call Is('feh')
+
+Simple naked flag values are converted to strings, too.
+
+  :Glaive fullplugin string=word
+  :call Is('word')
+
+Be careful, though -- only alphanumeric characters, periods, hyphens, and
+underscores are allowed.
+
+  :Glaive fullplugin string=w!e#i@r*d foo=bar
+  ~ ERROR(BadValue): * (glob)
+
+If you set a flag without giving it a value it will be set to the NUMBER one.
+Setting a flag without an operator will ALWAYS set it to the number one,
+regardless of the original type of the flag.
+
+  :Glaive fullplugin string
+  :call Is(1)
+
+Similarly, banging a string flag will set it to the NUMBER zero, not the string
+zero. Banging a flag ALWAYS sets it to integral zero, regardless of the original
+type of the flag.
+
+  :Glaive fullplugin string='oops'
+  :Glaive fullplugin !string
+  :call Is(0)
+
+Let's make the flag a string again:
+
+  :Glaive fullplugin string='Yay!'
+
+You can clear a string flag by setting it to the empty string. If you leave off
+the value entiely, that counts as the empty string.
+
+  :Glaive fullplugin string=
+  :call Is('')
+
+You can append or prepend to flags using the $= and ^= operators, respectively.
+
+  :Glaive fullplugin string='bbb'
+  :Glaive fullplugin string^='aaa'
+  :Glaive fullplugin string$='ccc'
+  :call Is('aaabbbccc')
+
+There is no .= operator, as flag names are allowed to contain periods.  However,
+you can use the += operator (an alias for $= operator) if you really want to.
+
+  :Glaive fullplugin string+='ddd'
+  :call Is('aaabbbcccddd')
+
+Callbacks work as expected:
+
+  :Glaive fullplugin string='    ...    '
+  :Glaive fullplugin string`='maktaba#string#Strip'
+  :call Is('...')
+
+Other syntax is invalid:
+
+  :call maktaba#error#TryCommand('Glaive fullplugin ~string')
+  ~ ERROR(WrongType): Could not set ~string in fullplugin.
+  | Expected a number. Got a string.
+  :call maktaba#error#TryCommand('Glaive fullplugin string-=foo')
+  ~ ERROR(WrongType): Could not set string-=foo in fullplugin.
+  | Expected a list or dictionary or number or float. Got a string.

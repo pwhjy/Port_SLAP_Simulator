@@ -1,0 +1,324 @@
+*chromatica*	Clang based syntax highlighting plugin for Neovim
+
+==============================================================================
+CONTENTS				*chromatica-contents*
+1. Intro			|chromatica-intro|
+2. Requirements			|chromatica-requirements|
+3. Installation			|chromatica-installation|
+4. Options			|chromatica-options|
+4. Commands			|chromatica-commands|
+6. Compilation Database		|chromatica-compilation-database|
+6. Responsive Mode		|chromatica-responsive-mode|
+8. FAQ				|chromatica-faq|
+9. LICENSE			|chromatica-license|
+
+==============================================================================
+					*chromatica-intro*
+1. Intro~
+
+Chromatica is a syntax highlighting for C-family languages. It is a
+remote plugin for Neovim and implemented based on Chromatica highlight engine.
+Chromatica provides following features currently:
+
+* Semantic-accurate syntax highlight
+
+Github~
+
+https://github.com/arakashic/chromatica.nvim
+
+==============================================================================
+					*chromatica-requirements*
+2. Requirements~
+
+Chromatica requires the following:
+
+* Neovim 0.1.6 (or newer) with python3.x enabled
+* libclang, preferably 3.9.0 (or newer). Please reference
+  http://llvm.org/apt/ to install
+* Chromatica has been tested under Linux and macOS
+
+==============================================================================
+					*chromatica-installation*
+3. Installation~
+
+Neobundle Install~
+>
+	Bundle 'arakashic/chromatica.nvim'
+<
+
+Manuall Install~
+
+Untar the chromatica.nvim.tar.gz to your vim path.
+
+==============================================================================
+					*chromatica-options*
+4. Options~
+
+|g:chromatica#enable_at_startup|
+|g:chromatica#libclang_path|
+|g:chromatica#enable_log|
+|g:chromatica#enable_profiling|
+|g:chromatica#global_args|
+|g:chromatica#responsive_mode|
+|g:chromatica#delay_ms|
+|g:chromatica#use_pch|
+|g:chromatica#highlight_feature_level|
+|g:chromatica#debug_log|
+|g:chromatica#dotclangfile_search_path|
+
+------------------------------------------------------------------------------
+					*g:chromatica#enable_at_startup*
+g:chromatica#enable_at_startup~
+
+Chromatica will automatically start when
+g:chromatica#enable_at_startup == `1`, regardless the filetype. To load
+Chromatica only for C-family languages, please refer to the manual of
+your plugin manager.
+
+Default: `0`
+>
+	let g:chromatica#enable_at_startup = 0
+<
+------------------------------------------------------------------------------
+					*g:chromatica#libclang_path*
+g:chromatica#libclang_path~
+
+Chromatica searches libclang-3.9 in your system automatically. You must
+set this option when chromatica cannot find libclang, or other version
+of libclang is used. This can be set to either the libclang file (.so/.dylib)
+or the path to the library.
+
+Default: `'/usr/lib/libclang.so'`
+>
+	let g:chromatica#libclang_path = '/usr/lib/libclang.so'
+<
+-------------------------------------------------------------------------------
+					*g:chromatica#global_args*
+g:chromatica#global_args~
+
+The global compile args of chromatica. It will be prepended in each
+file's compile args.
+
+Default: `[]`
+>
+	let g:chromatica#compile_args = []
+
+-------------------------------------------------------------------------------
+					*g:chromatica#responsive_mode*
+g:chromatica#responsive_mode~
+
+Chromatica responsive mode reparses and updates highlight as soon as you
+make any change to the buffer.
+
+Default: `0`
+>
+	let g:chromatica#responsive_mode = 0
+
+-------------------------------------------------------------------------------
+					*g:chromatica#delay_ms*
+g:chromatica#delay_ms~
+
+Chromatica throttles the number of reparse requests by delaying each requests.
+Only the last reparse requests in a given time window will be processed. This
+option should avoids the several performance issue in responsive mode.
+
+Default: `80`
+>
+	let g:chromatica#delay_ms = 80
+
+-------------------------------------------------------------------------------
+					*g:chromatica#use_pch*
+g:chromatica#use_pch~
+
+Chromatica uses pre-compiled header to reduce the overhead of reparse. The
+header is generated and updated by libclang. Disable this may cause
+significant performance issue in responsive mode.
+
+Default: `1`
+>
+	let g:chromatica#use_pch = 1
+
+-------------------------------------------------------------------------------
+					*g:chromatica#highlight_feature_level*
+g:chromatica#highlight_feature_level~
+
+By default, Chromatica handles most of the token in the code. A modified
+`c.vim` will be load for the highlighting the % format specifier and other
+stuff that a parser does not understand.
+
+Setting it to 0 would limit Chromatica to handle only the identifiers
+and literals. This is only recommended if you have a slow machine and
+are experiencing performance issue with the full functionality of
+Chromatica. Note the `$VIMRUNTIME/syntax/c.vim` will be loaded in this
+case and may exhibit highlight conflicts in some scenarios.
+
+Default: `1`
+>
+	let g:chromatica#highlight_feature_level = 1
+
+-------------------------------------------------------------------------------
+					*g:chromatica#debug_log*
+g:chromatica#enable_log~
+
+Chromatica will generate a debug log when this option is set. The file will be
+`chromatica.log` in the current directory.
+
+Default: `0`
+>
+	let g:chromatica#debug_log = 0
+
+-------------------------------------------------------------------------------
+					*g:chromatica#debug_profiling*
+g:chromatica#enable_profiling~
+
+Chromatica will generate a profiling in the debug log when this option is set.
+It only be effective when debug log is enabled.
+
+Default: `0`
+>
+	let g:chromatica#debug_profiling = 0
+
+-------------------------------------------------------------------------------
+					*g:chromatica#dotclangfile_search_path*
+g:chromatica#dotclangfile_search_path~
+
+Chromatica can search a customized path for the `.clang` file or the
+compilation database.
+
+Default: ``
+>
+	let g:chromatica#dotclangfile_search_path = ''
+
+==============================================================================
+					*chromatica-commands*
+5. Commands ~
+
+Chromatica provides these commands.
+
+|ChromaticaStart|
+|ChromaticaStop|
+|ChromaticaToggle|
+|ChromaticaShowInfo|
+|ChromaticaDbgAST|
+
+------------------------------------------------------------------------------
+					*ChromaticaStart*
+ChromaticaStart~
+
+Enable chromatica plugin.
+
+------------------------------------------------------------------------------
+					*ChromaticaStop*
+ChromaticaStop~
+
+Disable chromatica plugin.
+
+------------------------------------------------------------------------------
+					*ChromaticaToggle*
+ChromaticaToggle~
+
+Toggle on/off chromatica.
+
+------------------------------------------------------------------------------
+					*ChromaticaShowInfo*
+ChromaticaShowInfo~
+
+Show chromatica runtime information.
+
+------------------------------------------------------------------------------
+					*ChromaticaEnableLog*
+ChromaticaEnableLog~
+
+Start debug logging. The log file is stored in the current directory and named
+as `chromatica.log`.
+
+------------------------------------------------------------------------------
+					*ChromaticaDbgAST*
+ChromaticaDbgAST~
+
+Dump the AST info of the visible portion of the current buffer. The AST info
+is saved in `AST_out.log` file in the current directory. The file is useful
+for the users who want to customize the highlight. It contains the tokens that
+are parsed and their corresponding syntax group.
+
+The `AST_out.log` is color-coded with terminal colors. You need to use a
+reader that can or has the option to parse the terminal colors. For example,
+using `less`.
+
+	less -R AST_out.log
+
+==============================================================================
+					*chromatica-compilation-database*
+6. Compilation Database~
+
+Chromatica already has flags for simple codes. To provide the most accurate
+highlighting for complex projects, chromatica needs to know the correct
+compilation flags such as include search path and macro definitions. There are
+two ways to do that in chromatica.
+
+1. A compilation database `compile_commands.json`.
+
+    This is usually generated by CMake.
+
+2. A `.clang` file that has the compilation flags.
+
+   The `.clang` file allows you to manually set the flags. For example:
+>
+	flags=-I/home/arakshic/.local/include -DNDEBUG
+	flags=-I/../src
+
+   Each `flags` option can have one or more compiler arguments. A `.clang` file
+   can have multiple `flags` options. They will be concatenated in the order of
+   their appearance.
+
+When chromatica initializes, it search the current directory and the ancestor
+directories for these two files. If both file are present, chromatica will
+combine the flags in them.
+
+==============================================================================
+					*chromatica-responsive-mode*
+7. Responsive Mode~
+
+By default, chromatica only updates highlight when returned to normal mode
+after changing the buffer. This is quite awkward since you may have changed
+thousands lines of codes, but the highlight will only be updated when you
+finish those changes and return to normal mode.
+
+Chromatica provides a responsive mode that reparses and updates the hightlight
+as soon as you change the code (in insert mode). To use the responsive mode,
+simply set
+>
+	let g:chromatica#responsive_mode = 1
+
+in your vimrc.
+
+Note that the responsive mode comes at the cost of frequent reparsing the
+buffer. Even when the highlight is done asynchronously, frequent reparsing can
+still cause performance (editor repesonsiveness) problem if you C++ code is
+super complex (Yes, I haven't experienced this problem with C code). Chromatica
+uses pre-compiled header to speed up the repasing and throttles the number of
+reparse requests per seconds to avoid reparse flooding. You can increase
+|g:chromatica#delay_ms| if you still experiencing performance issues.
+
+
+==============================================================================
+					*chromatica-faq*
+8. FAQ~
+
+1. The fallback mode. Chromatica will fallback to the default mode (no
+semantic-based highlighting) for the current buffer, if libclang raises
+exceptions when processing the translation unit. The |ChromaticaShowInfo|
+command will print the message for the exception that causes the failure. You
+need to fix the problem and restart neovim.
+
+==============================================================================
+                                        *chromatica-license*
+9. License ~
+
+This software is licensed under the MIT license.
+
+Note: This license does not cover the files that come from the LLVM project.
+
+==============================================================================
+
+vim:tw=78:ts=8:noet:ft=help:

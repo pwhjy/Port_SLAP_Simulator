@@ -1,0 +1,107 @@
+{
+	"name": "vscode-proto3",
+	"displayName": "vscode-proto3",
+	"description": "Protobuf 3 support for Visual Studio Code",
+	"version": "0.2.2",
+	"publisher": "zxh404",
+	"icon": "images/icon.png",
+	"homepage": "https://github.com/zxh0/vscode-proto3/blob/master/README.md",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/zxh0/vscode-proto3"
+	},
+	"engines": {
+		"vscode": "^1.0.0"
+	},
+	"categories": [
+		"Languages",
+		"Snippets"
+	],
+	"activationEvents": [
+		"onLanguage:proto3",
+		"onCommand:proto3.compile.one",
+		"onCommand:proto3.compile.all"
+	],
+	"main": "./out/src/proto3Main",
+	"contributes": {
+		"commands": [
+			{
+				"command": "proto3.compile.one",
+				"title": "proto3: Compile This Proto"
+			},
+			{
+				"command": "proto3.compile.all",
+				"title": "proto3: Compile All Protos"
+			}
+		],
+		"languages": [
+			{
+				"id": "proto3",
+				"extensions": [
+					".proto"
+				],
+				"aliases": [
+					"Protocol Buffers"
+				]
+			}
+		],
+		"grammars": [
+			{
+				"language": "proto3",
+				"scopeName": "source.proto",
+				"path": "./syntaxes/proto3.tmLanguage"
+			}
+		],
+		"snippets": [
+			{
+				"language": "proto3",
+				"path": "./snippets/proto3.json"
+			}
+		],
+		"configuration": {
+			"type": "object",
+			"title": "vscode-proto3 configuration",
+			"properties": {
+				"protoc": {
+					"type": "object",
+					"description": "vscode-proto3 configuration",
+					"properties": {
+						"path": {
+							"type": "string",
+							"default": "protoc",
+							"description": "Path to protoc command"
+						},
+						"options": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": [],
+							"description": "Command line options for protoc"
+						}
+					}
+				}
+			}
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "tsc -p ./",
+		"compile": "tsc -watch -p ./",
+		"postinstall": "node ./node_modules/vscode/bin/install"
+	},
+	"devDependencies": {
+		"typescript": "^2.0.3",
+		"vscode": "^1.0.0",
+		"mocha": "^2.3.3",
+		"@types/node": "^6.0.40",
+		"@types/mocha": "^2.2.32"
+	},
+	"dependencies": {
+		"npm": "^5.7.1"
+	},
+	"__metadata": {
+		"id": "zxh404.vscode-proto3",
+		"publisherDisplayName": "zxh404",
+		"publisherId": "zxh404"
+	}
+}

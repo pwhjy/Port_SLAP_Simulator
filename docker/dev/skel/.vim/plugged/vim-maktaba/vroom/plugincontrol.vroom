@@ -1,0 +1,124 @@
+Vim plugins are split into a variety of different special files, some designed
+to be sourced once and some that must behave well when sourced multiple times by
+vim.
+
+First we'll configure maktaba, then we'll look at some examples.
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+We'll also install an example plugin to work with.
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:repo = maktaba#path#Join([g:thisdir, 'fakeplugins'])
+  :let g:path = maktaba#path#Join([g:repo, 'myplugin'])
+  :let g:myplugin = maktaba#plugin#Install(g:path)
+
+We'll also define a shortcut for getting plugin-relative paths since we'll be
+using a lot of paths.
+
+  :function PluginPath(dirs) abort<CR>
+  |  return maktaba#path#Join([g:myplugin.location] + a:dirs)<CR>
+  |endfunction
+
+Now, back to working with plugin files.
+
+The most common files are under the plugin/ directory. These will be sourced
+automatically after vim finishes executing the vimrc, and can be explicitly
+sourced by calling the Load function. These files should always have the same
+maktaba#plugin#Enter boilerplate verbatim at the top:
+
+01 let [s:plugin, s:enter] = maktaba#plugin#Enter(expand('<sfile>:p'))
+02 if !s:enter
+03   finish
+04 endif
+
+Here, we'll be calling maktaba#plugin#Enter manually to demonstrate its
+behavior.
+
+The first time a plugin file is sourced, it will get an "enter" value of 1 to
+signal it to go ahead and execute the rest of the file.
+
+  :let g:path_a = PluginPath(['plugin', 'a.vim'])
+  :let [g:plugin, g:enter] = maktaba#plugin#Enter(g:path_a)
+  :call maktaba#ensure#IsTrue(g:enter)
+
+"plugin" is always a handle to the plugin object, passed for convenience.
+
+  :call maktaba#ensure#IsEqual(g:plugin, g:myplugin)
+
+If the plugin file ever gets sourced again for whatever reason, the "enter"
+value will be 0, to help prevent any attempted redefinition of functions,
+commands, etc. later in the file.
+
+  :let [g:plugin, g:enter] = maktaba#plugin#Enter(g:path_a)
+  :call maktaba#ensure#IsFalse(g:enter)
+
+The "plugin" value is still the same handle, though.
+
+  :call maktaba#ensure#IsEqual(g:plugin, g:myplugin)
+
+Other plugin files are independent and will be permitted to enter once each.
+
+  :let g:path_b = PluginPath(['plugin', 'b.vim'])
+  :call maktaba#ensure#IsTrue(maktaba#plugin#Enter(g:path_b)[1])
+
+Files in after/plugin/ are also controlled independently.
+
+  :let g:after_b = PluginPath(['after', 'plugin', 'b.vim'])
+  :call maktaba#ensure#IsTrue(maktaba#plugin#Enter(g:after_b)[1])
+
+However, any plugin file can be disabled via the built-in 'plugin' flag.
+
+  :call g:myplugin.Flag('plugin[c]', 0)
+  :let g:path_c = PluginPath(['plugin', 'c.vim'])
+  :call maktaba#ensure#IsFalse(maktaba#plugin#Enter(g:path_c)[1])
+
+
+There are several other types of plugin files besides those in plugin/. Maktaba
+provides a concept of instant/ files, which will be activated as soon as
+possible after the plugin is activated.
+
+  :let g:instant_a = PluginPath(['instant', 'a.vim'])
+  :call maktaba#ensure#IsTrue(maktaba#plugin#Enter(g:instant_a)[1])
+  :call maktaba#ensure#IsFalse(maktaba#plugin#Enter(g:instant_a)[1])
+
+Similarly for ftplugin/ files, which are automatically activated by vim when it
+opens a buffer of the given filetype.
+
+  :edit! foo
+  :let g:ftplugin_a = PluginPath(['ftplugin', 'a.vim'])
+  :call maktaba#ensure#IsTrue(maktaba#plugin#Enter(g:ftplugin_a)[1])
+  :call maktaba#ensure#IsFalse(maktaba#plugin#Enter(g:ftplugin_a)[1])
+
+However, these are tied to the buffer, and can be entered once per buffer.
+
+  :edit! bar
+  :call maktaba#ensure#IsTrue(maktaba#plugin#Enter(g:ftplugin_a)[1])
+
+Finally, we have autoload files. Vim sources these automatically as needed, and
+expects to be able to pick up changes like newly-defined functions, so you
+generally *don't* want to prevent them from being entered multiple times.
+Nevertheless, maktaba provides the option.
+
+  :let g:autoload_a = PluginPath(['autoload', 'a.vim'])
+  :call maktaba#ensure#IsTrue(maktaba#plugin#Enter(g:autoload_a)[1])
+  :call maktaba#ensure#IsFalse(maktaba#plugin#Enter(g:autoload_a)[1])
+
+
+Attempting to use maktaba#plugin#Enter for any other paths will result in a
+CannotEnter error.
+
+  :let g:enter_fn = maktaba#function#FromExpr('maktaba#plugin#Enter(a:1)')
+  :let g:root_a = PluginPath(['a.vim'])
+  :call maktaba#error#Try(g:enter_fn.WithArgs(g:root_a), ['CannotEnter'])
+  ~ ERROR(CannotEnter): maktaba#plugin#Enter must be called from a file (glob)
+  | in an autoload/, plugin/, ftplugin/, or instant/ directory. It was called
+  | from *fakeplugins?myplugin?a.vim.
+  :let g:ftdetect_a = PluginPath(['ftdetect', 'a.vim'])
+  :call maktaba#error#Try(g:enter_fn.WithArgs(g:ftdetect_a), ['CannotEnter'])
+  ~ ERROR(CannotEnter): maktaba#plugin#Enter must be called from a file (glob)
+  | in an autoload/, plugin/, ftplugin/, or instant/ directory. It was called
+  | from *fakeplugins?myplugin?ftdetect?a.vim.

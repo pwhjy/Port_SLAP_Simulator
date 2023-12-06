@@ -1,0 +1,329 @@
+Vim's values and data types can be tricky. Maktaba provides a number of
+utilities for working with vim values.
+
+First things first, we have to install maktaba:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Vim's concept of value equality is completely insane. Consider:
+
+  :echomsg 0 == 'walrusface'
+  ~ 1
+
+  :set ignorecase
+  :echomsg 'word' == 'WoRd'
+  ~ 1
+  :set ignorecase&
+
+And sometimes it just gets in bad moods. What about the following values. Are
+they equal?
+
+  :echomsg [] == 0
+  ~ E691: Can only compare List with List
+  ~ E15: Invalid expression: [] == 0
+
+  :echomsg {} == function('empty')
+  ~ E735: Can only compare Dictionary with Dictionary
+  ~ E15: Invalid expression: {} == function('empty')
+
+A simple "No" would have done...
+
+maktaba#value#IsEqual performs a sane comparison to check if two values are
+*really* equal, in a meaningful sense.
+
+  :call maktaba#ensure#IsFalse(maktaba#value#IsEqual(0, 'walrusface'))
+
+  :set ignorecase
+  :call maktaba#ensure#IsFalse(maktaba#value#IsEqual('word', 'WoRd'))
+  :set ignorecase&
+
+And it never gets moody. All values are either equal or unequal.
+
+  :call maktaba#ensure#IsFalse(maktaba#value#IsEqual([], 0))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsEqual({}, function('empty')))
+
+Be careful, though: maktaba#value#IsEqual requires its parameters to be of the
+same type. 1 (the integer) is not the same thing as 1.0 (the float)!
+
+  :call maktaba#ensure#IsFalse(maktaba#value#IsEqual(1, 1.0))
+
+All this typing is wearing me out. Let's make some shortcuts before putting
+maktaba#value#IsEqual through its paces.
+
+  :function AssertEqual(a, b) abort
+  :  call maktaba#ensure#IsTrue(maktaba#value#IsEqual(a:a, a:b))
+  :endfunction
+
+  :function AssertNotEqual(a, b) abort
+  :  call maktaba#ensure#IsFalse(maktaba#value#IsEqual(a:a, a:b))
+  :endfunction
+
+Of course, any value is equal to itself:
+
+  :call AssertEqual(123, 123)
+  :call AssertEqual(3.14159, 3.14159)
+  :call AssertEqual('abc', 'abc')
+  :call AssertEqual(['a', 1, {}], ['a', 1, {}])
+  :call AssertEqual({1: {}, 'b': 2}, {1: {}, 'b': 2})
+  :call AssertEqual(function('empty'), function('empty'))
+
+  :let g:omega = ['countable']
+  :call insert(g:omega, g:omega, 0)
+  :call AssertEqual(g:omega, g:omega)
+
+And values that don't look equal aren't:
+
+  :call AssertNotEqual(123, 321)
+  :call AssertNotEqual(3.14159, 2.71828)
+  :call AssertNotEqual('abc', 'zyx')
+  :call AssertNotEqual(['a', 1, {}], ['b', 1, {}])
+  :call AssertNotEqual({1: 1}, {1: 2})
+  :call AssertNotEqual(function('empty'), function('exists'))
+
+  :let g:continuum = [g:omega]
+  :call insert(g:continuum, g:continuum, 0)
+  :call AssertNotEqual(g:omega, g:continuum)
+
+
+
+maktaba#value also contains a variety of functions for inspecting and
+manipulating individual values.
+
+It provides the concept of 'focus', a means of navigating nested data
+structures. An example is worth a thousand words:
+
+  :echomsg maktaba#value#Focus({'a': [0, {'b': 'hi'}, 1]}, ['a', 1, 'b'])
+  ~ hi
+
+This indexes a complex data structure using a keylist. Foci can also be used to
+alter deeply nested data structures:
+
+  :let g:data = {'a': [0, {'b': 'hi'}, 1]}
+  :call maktaba#value#Focus(g:data, ['a', 1, 'b'], 'bye')
+  :echomsg string(g:data)
+  ~ {'a': [0, {'b': 'bye'}, 1]}
+
+This is of technical use when manipulating maktaba flags. If you don't see a
+good use for it you're encouraged to ignore it.
+
+
+
+More importantly, maktaba provides a number of utilities for dealing with
+variable types. The most frivolous of these functions is maktaba#value#TypeName
+which tells you the name of the type of a variable.
+
+  :echomsg maktaba#value#TypeName(0)
+  ~ number
+  :echomsg maktaba#value#TypeName(0.0)
+  ~ float
+  :echomsg maktaba#value#TypeName('')
+  ~ string
+  :echomsg maktaba#value#TypeName([])
+  ~ list
+  :echomsg maktaba#value#TypeName({})
+  ~ dictionary
+  :echomsg maktaba#value#TypeName(function('empty'))
+  ~ funcref
+
+Contrast this with vim's type() function, which assigns an abstract number to
+each type.
+
+Maktaba provides a number of utilities for checking types. For example, the
+TypeMatches function can be used to check whether a value has the same type as
+a reference.
+
+  :call maktaba#ensure#IsTrue(maktaba#value#TypeMatches(10, 0))
+  :call maktaba#ensure#IsFalse(maktaba#value#TypeMatches(10, 'ten'))
+
+This function is generalized to allow you to check that the value has one of
+many allowed types:
+
+  :call maktaba#ensure#IsTrue(maktaba#value#TypeMatchesOneOf(10, [0, '']))
+  :call maktaba#ensure#IsFalse(maktaba#value#TypeMatchesOneOf(10, ['', {}]))
+
+Notice that maktaba checks whether types match. If you want to check whether
+something is a list, you do so by checking that it has the same type as the
+empty list, not by passing in the abstract number that vim happens to assign to
+lists. This makes your code a bit more readable. To make it even more readable,
+though, there are a number of utility functions that you can use to check value
+types in a readable way.
+
+  :call maktaba#ensure#IsTrue(maktaba#value#IsNumber(0))
+  :call maktaba#ensure#IsTrue(maktaba#value#IsString('number'))
+  :call maktaba#ensure#IsTrue(maktaba#value#IsList([0]))
+  :call maktaba#ensure#IsTrue(maktaba#value#IsDict({'number': 'ten'}))
+  :call maktaba#ensure#IsTrue(maktaba#value#IsFloat(10.0))
+  :call maktaba#ensure#IsTrue(maktaba#value#IsFuncref(
+  |    function('maktaba#value#IsFuncref')))
+
+  :call maktaba#ensure#IsFalse(maktaba#value#IsNumber(''))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsString(function('empty')))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsFuncref([]))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsList({}))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsDict(0.0))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsFloat(0))
+
+As a side note, you can get the empty value of any type using the
+maktaba#value#EmptyValue function:
+
+  :echomsg string(maktaba#value#EmptyValue(1000000))
+  ~ 0
+  :echomsg string(maktaba#value#EmptyValue(3.2))
+  ~ 0.0
+  :echomsg string(maktaba#value#EmptyValue('Hello, world!'))
+  ~ ''
+  :echomsg string(maktaba#value#EmptyValue(['list', 'stuff']))
+  ~ []
+  :echomsg string(maktaba#value#EmptyValue({'keys': 'values'}))
+  ~ {}
+
+The empty funcref value is function('empty').
+
+  :let g:Fn = function('maktaba#value#EmptyValue')
+  :let g:Emptied = maktaba#value#EmptyValue(g:Fn)
+  :let g:Empty = function('empty')
+  :call maktaba#ensure#IsTrue(maktaba#value#IsEqual(g:Emptied, g:Empty))
+
+Cute.
+
+
+
+Sometimes you want to check whether a variable can be called, or whether
+a variable can be iterated, without checking what type of variable it is.
+Maktaba defines three convenience type-groups. Those are:
+
+1. Collections: Lists and Dicts count as collections.
+
+  :call maktaba#ensure#IsTrue(maktaba#value#IsCollection(['listy', 'list']))
+  :call maktaba#ensure#IsTrue(maktaba#value#IsCollection({'keys': 'values'}))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsCollection('Can I play too?'))
+
+2. Numerics: Numbers and floats. Vim calls integers 'numbers'.
+
+  :call maktaba#ensure#IsTrue(maktaba#value#IsNumeric(0))
+  :call maktaba#ensure#IsTrue(maktaba#value#IsNumeric(0.0))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsNumeric('What about meeee?'))
+
+3. Callables: Strings and funcrefs. These can be passed to call().
+
+  :let g:Funcref = function('maktaba#value#IsCallable')
+  :call maktaba#ensure#IsTrue(maktaba#value#IsCallable(g:Funcref))
+  :call maktaba#ensure#IsTrue(maktaba#value#IsCallable('pleeeeeease'))
+
+Functions generated by maktaba#function are considered callable:
+
+  :let g:funcdict = maktaba#function#WithArgs('empty', 1)
+  :call maktaba#ensure#IsTrue(maktaba#value#IsCallable(g:funcdict))
+
+But normal dicts are not:
+
+  :call maktaba#ensure#IsFalse(maktaba#value#IsCallable({}))
+
+Note that IsCallable checks that the variable is of callable TYPE. It does not
+check whether the function described exists.
+
+4. Enums, as generated by maktaba#enum#Create:
+
+  :let g:enum = maktaba#enum#Create(['ENUM'])
+  :call maktaba#ensure#IsTrue(maktaba#value#IsEnum(g:enum))
+  :call maktaba#ensure#IsFalse(maktaba#value#IsEnum({}))
+
+
+Another utility maktaba#value provides is for saving and restoring a set of
+values. A common pattern in vimscript code is to temporarily override a variable
+or setting, execute some code, then restore the original value. It's
+surprisingly tricky to get this behavior right. For example, if a variable was
+originally undefined, "restoring" it means deleting it.
+
+Instead of worrying over the edge cases, just use maktaba#value#Save and
+Restore.
+
+  :let g:somevar = 'original value'
+  :let g:orig_values = maktaba#value#Save('g:somevar')
+  :let g:somevar = 'new value'
+
+  :call maktaba#value#Restore(g:orig_values)
+  :call maktaba#ensure#IsEqual('original value', g:somevar)
+
+This works properly even if the variable was originally undefined.
+
+  :unlet! g:nonexistent_var
+  :let g:orig_values = maktaba#value#Save('g:nonexistent_var')
+  :let g:nonexistent_var = 1
+
+  :call maktaba#value#Restore(g:orig_values)
+  :call maktaba#ensure#IsFalse(exists('g:nonexistent_var'))
+
+You can use SaveAll to store multiple values at once.
+
+  :let g:Fn = function('empty')
+  :let g:otherval = 'x'
+  :let g:orig_values =
+  | maktaba#value#SaveAll(['g:somevar', 'g:Fn', 'g:otherval'])
+  :unlet g:somevar
+  :let g:Fn = function('exists')
+  :unlet g:otherval
+  :let g:otherval = {}
+
+  :call maktaba#value#Restore(g:orig_values)
+  :call maktaba#ensure#IsEqual('original value', g:somevar)
+  :call maktaba#ensure#IsEqual(function('empty'), g:Fn)
+  :call maktaba#ensure#IsEqual('x', g:otherval)
+
+Note that for lists and dictionaries, it restores the original instance, but
+won't protect you from mutations within the instance.
+
+  :let g:orig_dict = {}
+  :let g:orig_list = []
+  :let g:dict = g:orig_dict
+  :let g:list = g:orig_list
+  :let g:orig_values = maktaba#value#SaveAll(['g:dict', 'g:list'])
+  :call add(g:list, 1)
+  :let g:list = ['temporary']
+  :let g:dict.foo = 1
+  :let g:dict = {'temp': 2}
+
+  :call maktaba#value#Restore(g:orig_values)
+  :call maktaba#ensure#IsTrue(g:list is g:orig_list)
+  :call maktaba#ensure#IsEqual([1], g:list)
+  :call maktaba#ensure#IsTrue(g:dict is g:orig_dict)
+  :call maktaba#ensure#IsEqual({'foo': 1}, g:dict)
+
+It works with a variety of different variable types.
+
+Environment variables:
+  :let $ENVVAR1 = 'original value'
+  :let g:orig_values = maktaba#value#SaveAll(['$ENVVAR1', '$ENVVAR2'])
+  :let $ENVVAR1 = ''
+  :let $ENVVAR2 = 'some value'
+  :call maktaba#value#Restore(g:orig_values)
+  :call maktaba#ensure#IsEqual('original value', $ENVVAR1)
+(Note that env variables can never be officially undefined, just empty strings.)
+  :call maktaba#ensure#IsEqual('', $ENVVAR2)
+
+Global settings:
+  :let g:orig_shell = &shell
+  :let g:orig_tags = &g:tags
+  :let g:orig_values = maktaba#value#SaveAll(['&shell', '&g:tags'])
+  :set shell=/bin/false
+  :setglobal tags=GLOBALTAGS
+  :setlocal tags=
+  :call maktaba#value#Restore(g:orig_values)
+  :call maktaba#ensure#IsEqual(g:orig_shell, &shell)
+Global value restored, but not local:
+  :call maktaba#ensure#IsEqual(g:orig_tags, &g:tags)
+  :call maktaba#ensure#IsEqual('', &l:tags)
+
+Local settings:
+  :setglobal tabstop=4
+  :setlocal tabstop=8
+  :let g:orig_values = maktaba#value#Save('&l:tabstop')
+  :setglobal tabstop=14
+  :setlocal tabstop=18
+  :call maktaba#value#Restore(g:orig_values)
+Local value restored, but not global:
+  :call maktaba#ensure#IsEqual(8, &l:tabstop)
+  :call maktaba#ensure#IsEqual(14, &g:tabstop)

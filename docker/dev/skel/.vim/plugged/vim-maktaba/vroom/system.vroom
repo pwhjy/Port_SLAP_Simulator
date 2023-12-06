@@ -1,0 +1,433 @@
+Using vim's system() function is finicky at best. It gives you no way to
+differentiate stderr from stdout. Depending upon what shell the user is using,
+system calls might break completely. (For example, fish-shell is a
+sh-incompatible shell that is growing in popularity). The maktaba#syscall
+library abstracts away that pain.
+
+Before we dive in, let's get maktaba installed:
+
+  @system (STRICT)
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+maktaba#syscall will always use 'sh' to execute system commands. Most plugins
+are written assuming that your shell is sh-compatible, so this usually Just
+Works. However, in some test frameworks (such as vroom) the shell is hijacked so
+that shell commands may be verified and mocked. We need to explicitly inform
+maktaba that the fake vroom shell is usable, otherwise it will ignore $SHELL and
+use 'sh' like it usually does.
+
+  :call maktaba#system#SetUsableShellRegex('\v<shell\.vroomfaker$')
+
+In our case, vroom has inserted a fake shell into the system environment that
+will listen for system calls and replace them with test responses. The above
+command lets maktaba#syscall know that vroom's fake shell is sh-compatible and
+should be used (instead of defaulting to sh). This is the mechanism which allows
+vroom to stub out system calls.
+
+
+
+The most important function is maktaba#syscall#Create, which creates an object
+used to execute system calls.
+
+  :let g:syscall = maktaba#syscall#Create(['echo', 'hi'])
+
+Note that it doesn't execute the system call yet, just creates and returns the
+object. To execute it, use the Call() method. It returns a dictionary of output
+that you can use to access the results.
+
+  :let g:out = g:syscall.Call()
+  ! echo hi 2> /tmp/* (glob)
+
+Notice how your command is executed with stderr redirected to a temp file. This
+is the mechanism by which maktaba#system#Call differentiates stdout and stderr
+(something that vim's system() cannot do).
+
+  :call maktaba#ensure#IsTrue(empty(g:out.stderr))
+  :echomsg g:out.stdout
+  ~ hi
+
+Non-zero status codes are converted into ShellError exceptions:
+
+  :let g:nothing_syscall = maktaba#syscall#Create('nothing')
+  :call maktaba#error#Try(maktaba#function#Method(g:nothing_syscall, 'Call'))
+  ! nothing 2> /tmp/* (glob)
+  $ 1 (status)
+  ~ ERROR(ShellError): Error running: nothing
+
+You can suppress errors from being thrown by passing in a 0 as Call's
+throw_errors argument:
+
+  :let g:fail_syscall = maktaba#syscall#Create('(echo failed >&2 && exit 1)')
+  :let g:out = g:fail_syscall.Call(0)
+  ! (echo failed >&2 && exit 1) 2> /tmp/* (glob)
+
+This is sometimes necessary to capture stderr.
+
+  :echomsg g:out.stderr
+  ~ failed
+
+In this case, the user is responsible for checking v:shell_error of their own
+volition to determine whether an error has occurred:
+
+  :echomsg v:shell_error
+  ~ 1
+
+
+Normally you'll pass maktaba#syscall#Create a list of unescaped words and trust
+it to do the escaping for you:
+
+  :call maktaba#syscall#Create(['echo', '\n']).Call()
+  ! echo '\n' 2> /tmp/* (glob)
+
+But you can also pass in a string that you've escaped yourself.
+
+  :call maktaba#syscall#Create('echo \n').Call()
+  ! echo \n 2> /tmp/* (glob)
+
+If you need to introspect the final string version of the command, with the
+joining and escaping applied, you can access it through the GetCommand method.
+
+  :echomsg maktaba#syscall#Create(['ls', 'path/to/something']).GetCommand()
+  ~ ls path/to/something
+  :let g:tail_cmd = maktaba#syscall#Create(['tail', '--lines=3', 'somefile'])
+  :echomsg g:tail_cmd.GetCommand()
+  ~ tail --lines=3 somefile
+  :echomsg maktaba#syscall#Create(['echo', '-n', 'w3iR|) Th|ng']).GetCommand()
+  ~ echo -n 'w3iR|) Th|ng'
+  :echomsg maktaba#syscall#Create(['dothing', '--name', '']).GetCommand()
+  ~ dothing --name ''
+  :echomsg maktaba#syscall#Create(['run.sh', 'foo:bar']).GetCommand()
+  ~ run.sh foo:bar
+
+
+The Call method will execute these commands in 'hidden' mode, using vim's
+system() function. It's ideal for quick system calls used in the plugin
+implementation, but should not be used for long-running user-driven commands
+since it blocks vim's main thread without showing any output. In these cases,
+you should run the system call with CallForeground.
+
+CallForeground takes a pause argument. If pause is 1, the output will stay on
+screen until the user presses Enter.
+
+  :let g:out1 = maktaba#syscall#Create(['echo', 'hi']).CallForeground(1)
+  ! echo hi
+  $ hi
+  > <CR>
+
+If 0, the user will see the output scroll past, but the output won't stay on
+screen after the system call finishes.
+
+  :let g:out2 = maktaba#syscall#Create(['echo', 'hi']).CallForeground(0)
+  ! echo hi
+  $ hi
+
+Foreground modes currently don't return stdout or stderr.
+
+  :call maktaba#ensure#IsTrue(empty(g:out1) && empty(g:out2))
+
+They still throw exceptions after non-zero exit statuses.
+
+  :let g:nothing_syscall = maktaba#syscall#Create('nothing')
+  :let g:syscall_fn = maktaba#function#Method(
+  | g:nothing_syscall, 'CallForeground')
+  :call maktaba#error#Try(g:syscall_fn.WithArgs(0))
+  ! nothing
+  $ 1 (status)
+  ~ ERROR(ShellError): Error running: nothing
+
+Unless throw_errors is disabled, that is.
+
+  :let g:fail_syscall = maktaba#syscall#Create('false')
+  :let g:out = g:fail_syscall.CallForeground(0, 0)
+  ! false
+
+
+You can configure the command to be executed from a particular directory using
+the WithCwd method.
+
+  :call maktaba#syscall#Create(['echo', 'hi']).WithCwd('..').Call()
+  ! cd .. && echo hi 2> /tmp/* (glob)
+
+If you pass a file instead of a directory, the command will be executed in the
+directory containing that file.
+
+  :let g:tmpfile = tempname()
+  :call writefile([], g:tmpfile)
+  :let g:expected = 'Running command from ' . maktaba#path#Dirname(g:tmpfile)
+
+  :let g:cmd = maktaba#syscall#Create(['echo', 'something']).WithCwd(g:tmpfile)
+  :let g:out = g:cmd.Call()
+  ! cd (.*) && echo something 2> /tmp/.*
+  $ Running command from \1
+
+  :call maktaba#ensure#IsEqual(g:expected, g:out.stdout)
+
+If the directory is missing, WithCwd raises a NotFound error.
+
+  :function BadDirSyscall() abort<CR>
+  |  call maktaba#syscall#Create('echo hi').WithCwd('/does/not/exist')<CR>
+  |endfunction
+  :call maktaba#error#Try('BadDirSyscall')
+  ~ ERROR(NotFound): Directory /does/not/exist does not exist.
+
+
+For system calls that need input from STDIN, you can use the WithStdin method.
+
+  :let g:cmd = maktaba#syscall#Create(['cat']).WithStdin('something')
+  :call maktaba#ensure#IsEqual('something', g:cmd.Call().stdout)
+  ! cat 2> /tmp/.*
+
+This is only supported when used with the Call method. Attempting to use it with
+CallForeground will cause ERROR(NotImplemented) to be thrown.
+
+  :function ForegroundSyscallWithStdin() abort<CR>
+  |  let l:cmd = maktaba#syscall#Create(['cat']).WithStdin('something')<CR>
+  |  call l:cmd.CallForeground(0)<CR>
+  |endfunction
+  :call maktaba#error#Try('ForegroundSyscallWithStdin')
+  ~ ERROR(NotImplemented): Stdin value cannot be used with CallForeground.
+
+
+You can chain commands using the And and Or methods.
+
+  :call maktaba#syscall#Create('true').And('echo SUCCESS').CallForeground(0)
+  ! true && echo SUCCESS
+  $ SUCCESS
+  :call maktaba#syscall#Create('false').Or('echo FAILURE').CallForeground(0)
+  ! false || echo FAILURE
+  $ FAILURE
+
+The chained command may also be another Syscall object.
+
+  :let g:success_syscall = maktaba#syscall#Create('echo SUCCESS')
+  :call maktaba#syscall#Create('true').And(g:success_syscall).CallForeground(0)
+  ! true && echo SUCCESS
+  $ SUCCESS
+
+
+
+Maktaba also has a legacy maktaba#system API. Eventually, it will be removed,
+but as long as it's still supported we'll document and test the behavior here.
+
+The most important function is maktaba#system#Call, which makes system calls in
+a safe fashion. It returns a dictionary of output that you can use to
+differentiate between stderr and stdout.
+
+  :let g:out = maktaba#system#Call(['echo', 'hi'])
+  ! echo hi 2> /tmp/* (glob)
+
+Notice how your command is executed with stderr redirected to a temp file. This
+is the mechanism by which maktaba#system#Call differentiates stdout and stderr
+(something that vim's system() cannot do).
+
+  :call maktaba#ensure#IsTrue(empty(g:out.stderr))
+  :echomsg g:out.stdout
+  ~ hi
+
+This function converts non-zero status codes into ShellError exceptions:
+
+  :let g:syscall_fn = maktaba#function#Create('maktaba#system#Call')
+  :call maktaba#error#Try(g:syscall_fn.WithArgs('nothing'))
+  ! nothing 2> /tmp/* (glob)
+  $ 1 (status)
+  ~ ERROR(ShellError): Error running: nothing
+
+  :call maktaba#error#Try(g:syscall_fn.WithArgs(['nothing', '!@#$']))
+  ! nothing '!@#$' 2> /tmp/* (glob)
+  $ 1 (status)
+  ~ ERROR(ShellError): Error running: nothing '!@#$'
+
+You can suppress error messages by passing in a 0 as maktaba#system#Call's third
+argument (throw_errors):
+
+  :let g:failcmd = '(echo failed >&2 && exit 1)'
+  :let g:out = maktaba#system#Call(g:failcmd, 'hidden', 0)
+  ! (echo failed >&2 && exit 1) 2> /tmp/* (glob)
+
+This is sometimes necessary to capture stderr.
+
+  :echomsg g:out.stderr
+  ~ failed
+
+In this case, the user is responsible for checking v:shell_error of their own
+volition to determine whether an error has occurred:
+
+  :echomsg v:shell_error
+  ~ 1
+
+(Ignore the second argument of maktaba#system#Call for now, we will encounter it
+shortly.)
+
+
+
+Normally you'll pass maktaba#system#Call a list of unescaped words and trust it
+to do the escaping for you:
+
+  :call maktaba#system#Call(['echo', '\n'])
+  ! echo '\n' 2> /tmp/* (glob)
+
+But you can also pass in a string that you've escaped yourself.
+
+  :call maktaba#system#Call('echo \n')
+  ! echo \n 2> /tmp/* (glob)
+
+
+
+The maktaba#system#Command function gives access to the escaping machinery. It
+combines lists of "words" into a command string.
+
+  :echomsg maktaba#system#Command(['ls', 'path/to/something'])
+  ~ ls path/to/something
+  :echomsg maktaba#system#Command(['tail', '--lines=3', 'somefile'])
+  ~ tail --lines=3 somefile
+  :echomsg maktaba#system#Command(['echo', '-n', 'w3iR|) Th|ng'])
+  ~ echo -n 'w3iR|) Th|ng'
+  :echomsg maktaba#system#Command(['run.sh', 'foo:bar'])
+  ~ run.sh foo:bar
+
+You can also give it a command string that has already been escaped and joined,
+in which case it's just returned:
+
+  :echomsg maktaba#system#Command('ls somepath/* 2>&1')
+  ~ ls somepath/* 2>&1
+
+
+
+
+The second argument of maktaba#system#Call specifies the execution context of
+the command. For example, the 'foreground' context echoes the output on the
+screen as the command executes:
+
+  :let g:out1 = maktaba#system#Call(['echo', 'hi'], 'foreground')
+  ! echo hi
+  $ hi
+
+foreground_pause does the same thing, and then pauses for user input:
+
+  :let g:out2 = maktaba#system#Call(['echo', 'hi'], 'foreground_pause')
+  ! echo hi
+  $ hi
+  > <CR>
+
+Foreground modes currently don't return stdout or stderr.
+
+  :call maktaba#ensure#IsTrue(empty(g:out1) && empty(g:out2))
+
+They still throw exceptions after non-zero exit statuses.
+
+  :call maktaba#error#Try(g:syscall_fn.WithArgs('nothing', 'foreground'))
+  ! nothing
+  $ 1 (status)
+  ~ ERROR(ShellError): Error running: nothing
+
+
+
+You can also use maktaba#system#CallAt to execute the command from a particular
+directory.
+
+  :call maktaba#system#CallAt(['echo', 'hi'], '..')
+  ! cd .. && echo hi 2> /tmp/* (glob)
+
+If you pass a file instead of a directory, the command will be executed in the
+directory containing that file.
+
+  :let g:tmpfile = tempname()
+  :call writefile([], g:tmpfile)
+  :let g:expected = 'Running command from ' . maktaba#path#Dirname(g:tmpfile)
+
+  :let g:out = maktaba#system#CallAt(['echo', 'something'], g:tmpfile)
+  ! cd (.*) && echo something 2> /tmp/.*
+  $ Running command from \1
+
+  :call maktaba#ensure#IsEqual(g:expected, g:out.stdout)
+
+
+
+If the directory is missing, maktaba#system#CallAt raises a NotFound error.
+
+  :let g:callat = maktaba#function#Create('maktaba#system#CallAt')
+  :call maktaba#error#Try(g:callat.WithArgs('echo hi', '/does/not/exist'))
+  ~ ERROR(NotFound): Directory /does/not/exist does not exist.
+
+
+
+Another minor convenience is that you can use maktaba#system#And and
+maktaba#system#Or to chain commands.
+
+  :call maktaba#system#Call(
+  |maktaba#system#And(['true', 'echo SUCCESS']), 'foreground')
+  ! true && echo SUCCESS
+  $ SUCCESS
+  :call maktaba#system#Call(
+  |maktaba#system#Or(['false', 'echo FAILURE']), 'foreground')
+  ! false || echo FAILURE
+  $ FAILURE
+
+To execute system calls asynchronously, use CallAsync.
+
+  :function AsyncWait(invocation, delay) abort<CR>
+  |  let l:deadline = localtime() + a:delay " wait for at most N seconds<CR>
+  |  while !a:invocation.finished && localtime() < l:deadline<CR>
+  |    sleep 100m<CR>
+  |  endwhile<CR>
+  |  call maktaba#ensure#IsTrue(a:invocation.finished,
+  | 'Async callback was expected to complete within %d seconds', a:delay)<CR>
+  |  return a:invocation<CR>
+  |endfunction
+  :let g:syscall = maktaba#syscall#Create(['echo', 'hi'])
+  :function Callback(result) abort<CR>
+  |  let g:callback_stdout = a:result.stdout<CR>
+  |endfunction
+  :call maktaba#syscall#SetVimjobDisabledForTesting(1)
+  :let g:invocation = AsyncWait(g:syscall.CallAsync('Callback', 0), 2)
+  ! .*echo hi; vim --servername .*
+  | --remote-expr "maktaba#syscall#clientserver#FinishInvocation.*
+  :echomsg g:callback_stdout
+  ~ hi
+  :echomsg g:invocation.stdout
+  ~ hi
+
+Async calls can't throw uncaught errors up to the original caller, so they're
+just shouted to the user directly.
+
+  :function ThrowErrorCallback(return_data) abort<CR>
+  |  throw 'BOOM'<CR>
+  |endfunction
+  :call AsyncWait(g:syscall.CallAsync('ThrowErrorCallback', 0), 2)
+  ! .*echo hi; .*
+  ~ Error from CallAsync callback: BOOM
+
+Asynchronous calls can also take a stdin parameter.
+
+  :let g:syscall = maktaba#syscall#Create(['cat']).WithStdin("Hello")
+  :let g:invocation = AsyncWait(g:syscall.CallAsync('Callback', 0), 2)
+  ! .*cat; vim --servername .*
+  | --remote-expr "maktaba#syscall#clientserver#FinishInvocation.*
+  :echomsg g:invocation.stdout
+  ~ Hello
+
+Async calls fall back to synchronous calls if disabled or not available.
+
+  :call maktaba#syscall#SetAsyncDisabledForTesting(1)
+  :let g:syscall = maktaba#syscall#Create(['echo', 'hi'])
+  :let g:invocation = g:syscall.CallAsync('Callback', 1)
+  ! echo hi 2> .*
+  :echomsg g:invocation.stdout
+  ~ hi
+
+As a legacy fallback, if the callback fails expecting more arguments, it will be
+called with the arguments: {callback}(env_dict, result_dict).
+
+  :function! Callback(env, result) abort<CR>
+  |  let g:env = a:env<CR>
+  |endfunction
+  :call g:syscall.CallAsync('Callback', 1)
+  ! echo hi 2> .*
+  :echomsg string(sort(keys(g:env)))
+  ~ ['buffer', 'column', 'line', 'path', 'tab']
+
+  @system

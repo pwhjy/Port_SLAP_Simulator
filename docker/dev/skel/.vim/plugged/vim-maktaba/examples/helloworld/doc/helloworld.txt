@@ -1,0 +1,62 @@
+*helloworld.txt*	Time-honored greeting
+Google                                                            *helloworld*
+
+==============================================================================
+CONTENTS                                                 *helloworld-contents*
+  1. Introduction...........................................|helloworld-intro|
+  2. Configuration.........................................|helloworld-config|
+  3. Commands............................................|helloworld-commands|
+  4. Mappings............................................|helloworld-mappings|
+
+==============================================================================
+INTRODUCTION                                                *helloworld-intro*
+
+This is a very basic toy plugin intended as a concrete, heavily-commented
+example of a maktaba plugin and a point of reference for developers creating
+new plugins. It's not intended to cover all the corner cases that will come up
+in developing a large, complex plugin, but it does take full advantage of
+maktaba and related tools, with comprehensive generated documentation and
+verbose tests doubling as executable documentation.
+
+==============================================================================
+CONFIGURATION                                              *helloworld-config*
+
+helloworld is configured using maktaba flags. It defines a |helloworld:name|
+flag that can be configured using |Glaive| or a plugin manager that uses the
+maktaba setting API. It also supports entirely disabling commands from being
+defined by clearing the plugin[commands] flag.
+
+                                                             *helloworld:name*
+Determines who the greeting will be addressed to when |:Hello| is executed
+without an explicit name argument.
+Default: 'world' `
+
+                                                 *helloworld:plugin[commands]*
+Configures whether plugin/commands.vim should be loaded.
+Default: 1 `
+
+                                                 *helloworld:plugin[mappings]*
+Configures whether plugin/mappings.vim should be loaded.
+Default: 0 `
+
+==============================================================================
+COMMANDS                                                 *helloworld-commands*
+
+There is a single command, |:Hello|, to issue a greeting.
+
+:Hello [name]                                                         *:Hello*
+  Issues an enthusiastic greeting addressed to [name].
+  [name] is |helloworld:name| if omitted.
+
+:Goodbye                                                            *:Goodbye*
+  Issues an enthusiastic farewell to recently greeted name.
+
+==============================================================================
+MAPPINGS                                                 *helloworld-mappings*
+
+There are two normal-mode mappings, "<Leader>Hh" to issue a greeting and
+"<Leader>Hg" to issue a farewell. The "<Leader>H" prefix is the default and
+can be configured via the plugin[mappings] flag.
+
+
+vim:tw=78:ts=8:ft=help:norl:

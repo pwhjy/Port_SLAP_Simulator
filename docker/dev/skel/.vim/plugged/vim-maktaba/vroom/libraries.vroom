@@ -1,0 +1,180 @@
+Vim plugins are bad at dependency management. And this is because dependency
+management is a hard problem, especially in vimscript. Vim plugins don't do
+a very good job of separating concerns: plugins can come library functions that
+you want to re-use, but they also usually come with effectful functionality such
+as commands, autocmds, keymappings, and more.
+
+Maktaba can't solve this problem, but IF you manage to separate the interface
+from the functions then maktaba can help you manage those implementations.
+
+Maktaba takes an opinionated stance to plugins. As far as we're concerned, there
+are two types of plugin: plugins that provide lots of nice user-visible
+functionality (such as commands and key mappings) and plugins which don't. The
+latter class of plugin provides library functions and APIs that are useful to
+many different plugins.
+
+The latter class is called a "library plugin". Maktaba itself happens to be
+a library plugin. Maktaba also provides utilities to help plugins require other
+library plugins.
+
+Maktaba provides an API for dependency management, but maktaba DOES NOT provide
+an implementation. It's up to plugin managers to integrate with maktaba and make
+this work.
+
+Implementations can choose whether to warn you nicely when you're missing
+dependencies, whether to download and install dependencies silently in the
+background, or anything in between. Users should be able to pick the point on
+the spectrum that they like.
+
+As always, before we can see any of the magic we have to star by installing
+maktaba.
+
+  :set nocompatible
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Library plugins are REQUIRED (by other plugins) using the
+maktaba#library#Require function. Required libraries are INSTALLED by library
+installers registered using maktaba#library#AddInstaller. That's about all
+there is to it.
+
+Library installers are functions that take a single parameter (the library) and
+must either install the library using maktaba#plugin#Install or throw a NotFound
+error. For example, here's a simple plugin installer:
+
+  :function! FakeInstaller(library) abort
+  :  let l:path = maktaba#path#Join([g:thisdir, 'fakeplugins', a:library])
+  :  if isdirectory(l:path)
+  :    return maktaba#plugin#GetOrInstall(l:path)
+  :  endif
+  :  throw maktaba#error#NotFound(a:library)
+  :endfunction
+
+Easy peasy.
+
+You have to register your installer in order for maktaba to know about it. If
+you try to require things before you have any installers, it will fail quickly.
+
+  :call maktaba#library#Require('library')
+  ~ ERROR(NotFound): Library "library" could not be installed,
+  | because there are no library installers registered with maktaba.
+
+Let's rectify that.
+
+  :call maktaba#library#AddInstaller('faker', 'FakeInstaller')
+
+The second parameter is the installer function. The name will do, but a funcref
+also works. The first parameter is the name, which shows up in error messages
+such as the ones that happen when you require something that isn't there:
+
+  :call maktaba#library#Require('nonexistent')
+  ~ ERROR(NotFound): Library "nonexistent" not recognized by any installer.
+  | The following installers were tried: faker.
+
+Now that the installer is installed, we can install existing library plugins.
+(Note that 'library' and 'library2' are stub plugins in the fakeplugin/
+directory near this file.)
+
+  :call maktaba#ensure#IsTrue(maktaba#library#Require('library'))
+
+It worked! Huzzah. The 'library' plugin is installed.
+
+  :call maktaba#ensure#IsTrue(maktaba#plugin#IsRegistered('library'))
+
+Dependencies can also be satisfied by plugins manually added to the runtimepath,
+even if they haven't been registered with maktaba yet.
+
+  :let g:tmpsource = tempname()
+  :call mkdir(g:tmpsource)
+  :function MakeLibDir(name)<CR>
+  |  let l:path = maktaba#path#Join([g:tmpsource, a:name])<CR>
+  |  call mkdir(l:path)<CR>
+  |  call mkdir(maktaba#path#Join([l:path, 'autoload']))<CR>
+  |  return l:path<CR>
+  |endfunction
+  :let &runtimepath .= ',' . MakeLibDir('tmplib1')
+  :call maktaba#library#Require('tmplib1')
+  :call maktaba#ensure#IsTrue(maktaba#plugin#IsRegistered('tmplib1'))
+
+These will be detected even if the directory name is not an exact match, as long
+as it canonicalizes to the same name.
+
+  :let &runtimepath .= ',' . MakeLibDir('vim-tmplib2')
+  :call maktaba#library#Require('tmplib2')
+
+  :let &runtimepath .= ',' . MakeLibDir('tmplib3.vim')
+  :call maktaba#library#Require('tmplib3')
+
+Note that installers are only called the first time a plugin is installed. To
+see this, let's install a louder installer.
+
+  :function! LoudInstaller(library) abort
+  :  echomsg 'OMG WHERE DID I PUT IT IT WAS RIGHT HERE A MINUTE AGO'
+  :  throw maktaba#error#NotFound(a:library)
+  :endfunction
+  :call maktaba#library#AddInstaller('loud', 'LoudInstaller')
+
+If we try to install the same plugin again, the loud installer won't be called:
+
+  :call maktaba#ensure#IsTrue(maktaba#library#Require('library'))
+
+But that might be because installers are called in order of registration. Let's
+unregister the first installer.
+
+  :call maktaba#library#RemoveInstaller('faker')
+
+Now we can verify that plugins are not run through installers when they've
+already been installed:
+
+  @messages (STRICT)
+  :call maktaba#ensure#IsTrue(maktaba#library#Require('library'))
+  @messages
+
+Also, note that maktaba#library#Require returns 0 when it has failed:
+
+  :call maktaba#ensure#IsFalse(maktaba#library#Require('library2'))
+  ~ OMG WHERE DID I PUT IT IT WAS RIGHT HERE A MINUTE AGO
+  ~ ERROR(NotFound): Library "library2" not recognized by any installer.
+  | The following installers were tried: loud.
+
+Errors are printed instead of thrown because maktaba#library#Require is often
+called in autoloaded files without protection. If exceptions were thrown, the
+user would be subjected to ugly stack traces upon failure. If you promise to
+catch the error messages yourself, you can use the maktaba#library#Import
+function instead.
+
+  :call maktaba#ensure#IsFalse(maktaba#plugin#IsRegistered('library2'))
+  :call maktaba#library#AddInstaller('faker', 'FakeInstaller')
+  :call maktaba#library#Import('library2')
+  ~ OMG WHERE DID I PUT IT IT WAS RIGHT HERE A MINUTE AGO
+  :call maktaba#ensure#IsTrue(maktaba#plugin#IsRegistered('library2'))
+
+That loud manager is annoying now, let's axe it.
+
+  :call maktaba#library#RemoveInstaller('loud')
+
+Finally, note that only LIBRARY PLUGINS may be installed in this way. Plugins
+with user interfaces, new filetypes, keybindings, etc. should never be required
+as a dependency: if they were then the user could get weird autocmds/key
+mappings that they never asked for thanks to a dependency that they didn't know
+about.
+
+As such, maktaba#library#Require only works on plugins that have an autoload
+directory and no indent/ftplugin/etc. directories.
+
+  :let g:require = maktaba#function#Create('maktaba#library#Require')
+  :call maktaba#error#Try(g:require.WithArgs('ftplugin'))
+  ~ ERROR(NotALibrary): Plugin "ftplugin" is not a library plugin.
+  | It contains the following directories illegal in library plugins:
+  | plugin, ftdetect, ftplugin, indent, syntax.
+
+Libraries must also have an autoload directory (why else would you Require
+them?)
+
+  :call maktaba#error#Try(g:require.WithArgs('emptyplugin'))
+  ~ ERROR(NotALibrary): Plugin "emptyplugin" is not a library plugin.
+  | It doesn't contain an autoload directory.
+
+See ":help maktaba#plugin#Import()" for more rationale behind this approach.

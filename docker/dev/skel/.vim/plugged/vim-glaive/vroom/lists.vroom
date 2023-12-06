@@ -1,0 +1,125 @@
+This test file puts glaive lists through their paces. See glaive.vroom for an
+introduction to glaive syntax.
+
+Install glaive:
+
+  :set nocompatible
+  :let g:glaivedir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:glaivedir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+Install a plugin:
+
+  :let g:thisdir = fnamemodify($VROOMFILE, ':p:h')
+  :let g:path = maktaba#path#Join([g:thisdir, 'fakeplugins', 'fullplugin'])
+  :let g:plugin = maktaba#plugin#Install(g:path)
+
+Define a list flag:
+
+  :call g:plugin.Flag('list', [1, 2, 3])
+
+Utility function for checking the list value:
+
+  :function! Is(value) abort
+  :  call maktaba#ensure#IsEqual(g:plugin.Flag('list'), a:value)
+  :endfunction
+
+
+You can set simple lists by using simple comma-separated words.
+
+  :Glaive fullplugin list=a,b,c
+  :call Is(['a', 'b', 'c'])
+
+Be careful, though -- only alphanumeric characters, periods, hyphens, and
+underscores are allowed.
+
+  :Glaive fullplugin list=#1,#2
+  ~ ERROR(BadValue): * (glob)
+
+For more complicated lists, use evaluating syntax:
+
+  :Glaive fullplugin list=`['#1', '#2']`
+  :call Is(['#1', '#2'])
+
+This allows you to specify your lists precisely.
+
+You may set individual items in a list:
+
+  :Glaive fullplugin list[0]='#0'
+  :call Is(['#0', '#2'])
+
+This works no matter how complex your data structure.
+
+  :Glaive fullplugin list=`['decoy', {'outer': {'inner': ['target']}}]`
+  :Glaive fullplugin list[1][outer][inner][0]=jackpot
+  :call Is(['decoy', {'outer': {'inner': ['jackpot']}}])
+
+If you set a flag without giving it a value it will be set to the NUMBER one.
+Setting a flag without an operator will ALWAYS set it to the number one,
+regardless of the original type of the flag.
+
+  :Glaive fullplugin list
+  :call Is(1)
+
+Similarly, banging a list flag will set it to the NUMBER zero, not the list
+zero. Banging a flag ALWAYS sets it to integral zero, regardless of the original
+type of the flag.
+
+  :Glaive fullplugin list='oops'
+  :Glaive fullplugin !list
+  :call Is(0)
+
+Let's make the flag a list again:
+
+  :Glaive fullplugin list=`['Thanks.']`
+
+You may set a list to the empty list by leaving off the value.
+
+  :Glaive fullplugin list=
+  :call Is([])
+
+You can append or prepend to flags using the $= and ^= operators, respectively.
+
+  :Glaive fullplugin list=b,c
+  :Glaive fullplugin list^=a,b
+  :Glaive fullplugin list$=c,d
+  :call Is(['a', 'b', 'b', 'c', 'c', 'd'])
+
++= is an alias for $=.
+
+  :Glaive fullplugin list+=d,e
+  :call Is(['a', 'b', 'b', 'c', 'c', 'd', 'd', 'e'])
+
+Callbacks work as expected:
+
+  :Glaive fullplugin list`='maktaba#list#RemoveDuplicates'
+  :call Is(['a', 'b', 'c', 'd', 'e'])
+
+This even works for individual items in the list:
+
+  :function! Tailify(val)
+  :  return 'tail'
+  :endfunction
+  :Glaive fullplugin list[-1]`=Tailify
+  :call Is(['a', 'b', 'c', 'd', 'tail'])
+
+Finally, you may remove items from a list using -=. You may remove items either
+one at a time:
+
+  :Glaive fullplugin list-=tail
+  :call Is(['a', 'b', 'c', 'd'])
+
+Or many at a time:
+
+  :Glaive fullplugin list-=a,d
+  :call Is(['b', 'c'])
+
+Removing non-existent items is no big deal.
+  :Glaive fullplugin list-=e,e,e
+  :call Is(['b', 'c'])
+
+Lists may not be inverted. What would that even mean?
+
+  :call maktaba#error#TryCommand('Glaive fullplugin ~list')
+  ~ ERROR(WrongType): Could not set ~list in fullplugin.
+  | Expected a number. Got a list.

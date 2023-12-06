@@ -1,0 +1,206 @@
+Maktaba has some utilities that help you deal with system paths in
+a machine-independent way. Mostly, this involves manipulating filepaths and
+figuring out which directions the slashes go. This is nontrivial in vim thanks
+to the 'shellslash' setting (which allows windows users to use unix-style
+slashes).
+
+But before we dive into things, let's get maktaba installed:
+
+  :set nocompatible
+  :let g:maktabadir = fnamemodify($VROOMFILE, ':p:h:h')
+  :let g:bootstrapfile = g:maktabadir . '/bootstrap.vim'
+  :execute 'source' g:bootstrapfile
+
+And define some utility functions:
+
+Now, on to maktaba#path.
+
+The most important utilities are of course maktaba#path#Join and
+maktaba#path#Split.
+
+  :echomsg string(maktaba#path#Split('/path/to/nowhere'))
+  ~ ['/', 'path', 'to', 'nowhere']
+
+  :echomsg maktaba#path#Join(['/', 'path', 'to', 'nowhere'])
+  ~ /path/to/nowhere
+
+Notice that in absolute paths, the root is included as a path component. This
+helps you recognize relative paths.
+
+  :echomsg string(maktaba#path#Split('relative/path'))
+  ~ ['relative', 'path']
+
+Trailing slashes are preserved as well:
+
+  :echomsg string(maktaba#path#Split('relative/path/'))
+  ~ ['relative', 'path/']
+
+
+
+You can join whole paths as well as path components.
+
+  :echomsg maktaba#path#Join(['/path/to/nowhere', 'relative/path'])
+  ~ /path/to/nowhere/relative/path
+
+Joining a relative path to an absolute path yields the absolute path.
+
+  :echomsg maktaba#path#Join(['relative/path', '/path/to/nowhere'])
+  ~ /path/to/nowhere
+
+This holds true even if you're joining tiny components.
+
+  :echomsg maktaba#path#Join(['relative', 'path', '/', 'path', 'to', 'nowhere'])
+  ~ /path/to/nowhere
+
+Note that joining an empty component to a path will add a trailing slash, but
+only once:
+
+  :echomsg maktaba#path#Join(['/path/to/dir', ''])
+  ~ /path/to/dir/
+  :echomsg maktaba#path#Join(['/path/to/dir/', ''])
+  ~ /path/to/dir/
+  :echomsg maktaba#path#Join(['/path/to/dir/', '', '', '', ''])
+  ~ /path/to/dir/
+
+
+
+Two utility functions help you manage absolute/relative paths. The first,
+maktaba#path#RootComponent, lets you get the root component of the path. This is
+empty for relative paths:
+
+  :echomsg string(maktaba#path#RootComponent('it/is/all/relative'))
+  ~ ''
+
+But for absolute paths the path root will be returned.
+
+  :echomsg maktaba#path#RootComponent('/only/sith/deal/in/absolutes')
+  ~ /
+
+In unix, / is the only root. In windows, this may be a drive like C:\\.
+
+maktaba#path#IsAbsolute is a quicker way to determine whether paths are
+absolute.
+
+  :call maktaba#ensure#IsFalse(maktaba#path#IsAbsolute('it/is/all/relative'))
+  :call maktaba#ensure#IsTrue(maktaba#path#IsAbsolute('/abso/lutely'))
+
+maktaba#path#IsRelative also works as expected:
+
+  :call maktaba#ensure#IsFalse(maktaba#path#IsRelative('/abso/lutely'))
+  :call maktaba#ensure#IsTrue(maktaba#path#IsRelative('it/is/all/relative'))
+
+Maktaba also provides Basename and Dirname functions, which work in a fashion
+similar to the python functions (in os.path) by the same names. Basename gets
+the last component of the path:
+
+  :echomsg string(maktaba#path#Basename('/path/to/file'))
+  ~ 'file'
+  :echomsg string(maktaba#path#Basename('/path/to/dir/'))
+  ~ ''
+  :echomsg string(maktaba#path#Basename('file'))
+  ~ 'file'
+
+Dirname gets all but the last components of the path (in path form, without a
+trailing slash):
+
+  :echomsg string(maktaba#path#Dirname('/path/to/file'))
+  ~ '/path/to'
+  :echomsg string(maktaba#path#Dirname('/path/to/dir/'))
+  ~ '/path/to/dir'
+  :echomsg string(maktaba#path#Dirname('file'))
+  ~ ''
+
+For both utilities, callers are encouraged to use canonical dir representation
+(with a trailing slash) for directory paths, to disambiguate them from file
+paths. You can use maktaba#path#AsDir to canonicalize a given directory path.
+
+  :echomsg maktaba#path#AsDir('foo/bar')
+  ~ foo/bar/
+
+This will use the correct trailing slash for the system (this vroom file
+currently assumes a Linux platform using forward slashes). It will ensure only
+a single trailing slash is present.
+
+  :echomsg maktaba#path#AsDir('foo/bar///')
+  ~ foo/bar/
+
+
+
+Dirname manipulates the runtimepath syntactically. It uses trailing slashes to
+determine how to modify the path. It does not care whether the path actually
+describes a directory on the filesystem.
+
+A separate function will take any path and return a pertinent directory path.
+If you point it to a file, it will return the parent directory:
+
+  :let g:filepath = tempname()
+  :call writefile([], g:filepath)
+  :let g:dirpath = fnamemodify(g:filepath, ':h') . '/'
+  :call maktaba#ensure#IsEqual(maktaba#path#GetDirectory(g:filepath), g:dirpath)
+
+But if you point it to a directory, it will just return that directory:
+
+  :let g:fromdir = maktaba#path#GetDirectory(fnamemodify(g:filepath, ':h'))
+  :call maktaba#ensure#IsEqual(g:fromdir, g:dirpath)
+
+The trailing slash is always included.
+
+
+
+Another useful utility function is the maktaba#path#MakeRelative function, which
+makes one absolute path relative to another.
+
+  :echomsg maktaba#path#MakeRelative(
+  |    '/deep/in/the/stomach/of/the/whale/',
+  |    '/deep/in/the/heart/of/texas')
+  ~ ../../../../heart/of/texas
+
+  :echomsg maktaba#path#MakeRelative('/point/A', '/point/A')
+  ~ .
+  :echomsg maktaba#path#MakeRelative('/point/A/', '/point/A/')
+  ~ ./
+  :echomsg maktaba#path#MakeRelative('/point/A', '/point/A/')
+  ~ ./
+
+Your paths had better be absolute before trying this.
+
+  :let g:makerel = maktaba#function#Create('maktaba#path#MakeRelative')
+  :call maktaba#error#Try(g:makerel.WithArgs(
+  |    'the/light/side',
+  |    '/only/sith/deal/in/absolutes'))
+  ~ ERROR(BadValue): the/light/side is not an absolute path.
+
+
+
+Maktaba also provides maktaba#path#MakeDirectory. This is basically the same as
+vim's mkdir() with 'p', but works around a vim 7.3 bug where mkdir chokes on
+trailing slashes.
+
+  :let g:tempdir = fnamemodify(tempname(), ':h')
+  :let g:newdir = maktaba#path#Join([g:tempdir, 'nested', 'directory'])
+  :echomsg maktaba#path#MakeDirectory(g:newdir)
+  ~ 1
+
+It returns 1 if the directory was created and zero if it already existed. As you
+can see below, it handles trailing slashes correctly.
+
+  :echomsg maktaba#path#MakeDirectory(g:newdir . '/')
+  ~ 0
+
+
+
+Finally, maktaba provides a function maktaba#path#Exists to determine whether
+a filepath exists on the system.
+
+  :let g:newfile = tempname()
+  :call maktaba#ensure#IsFalse(maktaba#path#Exists(g:newfile))
+  :call writefile([], g:newfile)
+  :call maktaba#ensure#IsTrue(maktaba#path#Exists(g:newfile))
+
+  :let g:newdir = tempname()
+  :call maktaba#ensure#IsFalse(maktaba#path#Exists(g:newdir))
+  :call maktaba#path#MakeDirectory(g:newdir)
+  :call maktaba#ensure#IsTrue(maktaba#path#Exists(g:newdir))
+
+This fills the hole between vim's isdirectory() and filereadable(): it will
+return true when a file exists even if it's unreadable.

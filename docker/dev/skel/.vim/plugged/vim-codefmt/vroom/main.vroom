@@ -1,0 +1,155 @@
+Vim is useful for editing source code and has some primitive features for
+formatting code. Most of these are based on error-prone heuristics and are
+better for getting close-enough formatting quickly as you edit, not for closely
+adhering to particular formatting guidelines.
+
+The utilities in codefmt hook vim up to high-quality external formatters like
+clang-format that you can trigger on-demand or when saving buffers.
+
+This file demonstrates the basics of codefmt usage. Other files in this
+directory cover various topics of codefmt usage:
+
+* autopep8.vroom - Configuring and using the built-in autopep8 formatter
+* clangformat.vroom - Configuring and using the built-in clang-format formatter
+* gofmt.vroom - Configuring and using the built-in gofmt formatter
+* yapf.vroom - Configuring and using the built-in yapf formatter
+* gn.vroom - Configuring and using the built-in gn formatter
+* autocmd.vroom - Automatic hooks like format-on-save
+* extensions.vroom - Adding additional formatters for codefmt to use
+
+In order for these tests to work, maktaba MUST be in the same parent directory
+as codefmt. Given that that's the case, all we have to do is source the
+setupvroom.vim file, which bootstraps the codefmt plugin and configures it to
+work properly under vroom.
+
+  :source $VROOMDIR/setupvroom.vim
+
+
+It integrates with vim-repeat if available for improved repeating support. We'll
+stub that out for vroom.
+
+  :let g:repeat_calls = []
+  :function FakeRepeat(...)<CR>
+  |  call add(g:repeat_calls, a:000)<CR>
+  :endfunction
+  :call maktaba#test#Override('repeat#set', 'FakeRepeat')
+
+We'll also stub it out to not care whether certain executables are installed on
+your system.
+
+  :call codefmt#SetWhetherToPerformIsAvailableChecksForTesting(0)
+
+
+This plugin defines a :FormatCode command that can be used to reformat buffers.
+
+  % void f() {int i; SomeFunction(parameter,// comment<CR>
+  |i);}
+
+  :FormatCode clang-format
+  ! clang-format --version .*
+  $ clang-format version 3.3.0 (tags/testing)
+  ! clang-format .*
+  $ void f() {
+  $   int i;
+  $   SomeFunction(parameter,  // comment
+  $                i);
+  $ }
+  void f() {
+    int i;
+    SomeFunction(parameter,  // comment
+                 i);
+  }
+  @end
+
+
+
+To format specific line ranges of C++ code using clang-format, use :FormatLines.
+
+  % void f() {<CR>
+  |  int i = 2+2;<CR>
+  |  int i = 3+3;<CR>
+  |  int i = 4+4;<CR>
+  |}
+
+  :let g:repeat_calls = []
+
+  :3,4FormatLines clang-format
+  ! clang-format .* -lines 3:4.*
+  $ void f() {
+  $   int i = 2+2;
+  $   int i = 3 + 3;
+  $   int i = 4 + 4;
+  $ }
+  void f() {
+    int i = 2+2;
+    int i = 3 + 3;
+    int i = 4 + 4;
+  }
+  @end
+
+It calls repeat#set to configure the repeat mapping (the "." mapping) to format
+the same number of lines again.
+
+  :echomsg string(g:repeat_calls)
+  ~ [[':FormatLines clang-format^M', 2]]
+
+
+
+Formatting doesn't move the cursor.
+
+  % void f() {int i;<CR>
+  |SomeFunction();<CR>
+  |}
+
+  > 1G/Fun<CR>
+  :echomsg line('.') . ',' . col('.')
+  ~ 2,5
+  :FormatCode clang-format
+  ! clang-format .*
+  $ void f() {
+  $   int i;
+  $   SomeFunction();
+  $ }
+  void f() {
+    int i;
+    SomeFunction();
+  }
+  @end
+  :echomsg line('.') . ',' . col('.')
+  ~ 2,5
+
+
+
+The examples above pass an explicit formatter argument to :FormatCode and
+:FormatLines to select which formatter to use. In day-to-day editing, that would
+get old pretty fast, and you'd probably be invoking it through key mappings that
+won't take arguments, anyway. For several filetypes, codefmt selects an
+appropriate formatter by default. For instance, the built-in gofmt formatter
+will be used by default for the go filetype.
+
+  @clear
+  % f()
+  :set filetype=go
+  :FormatCode
+  ! gofmt .*
+  $ f()
+
+You can also configure which formatter to use on a buffer-by-buffer basis via
+b:codefmt_formatter, which will take precedence over the built-in defaulting.
+
+  :let b:codefmt_formatter = 'clang-format'
+  :FormatCode
+  ! clang-format .*
+  $ f()
+  :unlet b:codefmt_formatter
+
+If no default formatter is available for a buffer, you'll just see an error.
+
+  :set filetype=
+  :FormatCode
+  ~ Not available. codefmt doesn't have a default formatter for this buffer.
+
+Similarly, you'll see an error if an explicit formatter name isn't recognized.
+
+  :FormatCode nonexistentformatter
+  ~ "nonexistentformatter" is not a supported formatter.

@@ -1,0 +1,126 @@
+hi default Member ctermfg=LightBlue guifg=LightBlue
+hi default Variable ctermfg=Grey guifg=Grey
+hi default Namespace ctermfg=Yellow guifg=#BBBB00
+hi default Typedef ctermfg=Yellow gui=bold guifg=#BBBB00
+hi default EnumConstant ctermfg=LightGreen guifg=LightGreen
+hi default chromaticaException ctermfg=Yellow gui=bold guifg=#B58900
+hi default chromaticaCast ctermfg=Green gui=bold guifg=#719E07
+hi default OperatorOverload cterm=bold ctermfg=14 gui=bold guifg=#268bd2
+hi default AccessQual cterm=underline ctermfg=81 gui=bold guifg=#6c71c4
+hi default Linkage ctermfg=239 guifg=#09AA08
+hi default AutoType ctermfg=Yellow guifg=#cb4b16
+
+hi default link chromaticaPrepro PreProc
+hi default link chromaticaDecl Identifier
+hi default link chromaticaRef Type
+hi default link chromaticaKeyword Keyword
+
+hi default link chromaticaInclusionDirective cIncluded
+hi default link chromaticaDeclRefExprEnum Constant
+hi default link chromaticaDeclRefExprCall Type
+hi default link chromaticaMemberRefExprCall Member
+hi default link chromaticaMemberRefExprVar Member
+hi default link chromaticaTemplateNoneTypeParameter Identifier
+
+hi default link chromaticaStructDecl Type
+hi default link chromaticaUnionDecl Type
+hi default link chromaticaClassDecl Type
+hi default link chromaticaEnumDecl Type
+hi default link chromaticaFieldDecl Member
+hi default link chromaticaEnumConstantDecl EnumConstant
+hi default link chromaticaFunctionDecl Function
+hi default link chromaticaVarDecl Variable
+hi default link chromaticaParmDecl Variable
+hi default link chromaticaObjCInterfaceDecl Normal
+hi default link chromaticaObjCCategoryDecl Normal
+hi default link chromaticaObjCProtocolDecl Normal
+hi default link chromaticaObjCPropertyDecl Normal
+hi default link chromaticaObjCIvarDecl Normal
+hi default link chromaticaObjCInstanceMethodDecl Normal
+hi default link chromaticaObjCClassMethodDecl Normal
+hi default link chromaticaObjCImplementationDecl Normal
+hi default link chromaticaObjCCategoryImplDecl Normal
+hi default link chromaticaTypedefDecl Type
+hi default link chromaticaCXXMethod Function
+hi default link chromaticaNamespace Namespace
+hi default link chromaticaLinkageSpec Normal
+hi default link chromaticaConstructor Function
+hi default link chromaticaDestructor Function
+hi default link chromaticaConversionFunction Function
+hi default link chromaticaTemplateTypeParameter Type
+hi default link chromaticaNonTypeTemplateParameter Variable
+hi default link chromaticaTemplateTemplateParameter Type
+hi default link chromaticaFunctionTemplate Function
+hi default link chromaticaClassTemplate Type
+hi default link chromaticaClassTemplatePartialSpecialization Type
+hi default link chromaticaNamespaceAlias Namespace
+hi default link chromaticaUsingDirective Type
+hi default link chromaticaUsingDeclaration Type
+hi default link chromaticaTypeAliasDecl Type
+hi default link chromaticaObjCSynthesizeDecl Normal
+hi default link chromaticaObjCDynamicDecl Normal
+hi default link chromaticaCXXAccessSpecifier Label
+hi default link chromaticaObjCSuperClassRef Normal
+hi default link chromaticaObjCProtocolRef Normal
+hi default link chromaticaObjCClassRef Normal
+hi default link chromaticaTypeRef Type
+hi default link chromaticaCXXBaseSpecifier Type
+hi default link chromaticaTemplateRef Type
+hi default link chromaticaNamespaceRef Namespace
+hi default link chromaticaMemberRef Member
+hi default link chromaticaLabelRef Label
+hi default link chromaticaOverloadedDeclRef Function
+hi default link chromaticaVariableRef Variable
+hi default link chromaticaFirstInvalid Normal
+hi default link chromaticaInvalidFile Error
+hi default link chromaticaNoDeclFound Error
+hi default link chromaticaNotImplemented Normal
+hi default link chromaticaInvalidCode Error
+hi default link chromaticaFirstExpr Normal
+hi default link chromaticaDeclRefExpr Variable
+hi default link chromaticaMemberRefExpr Member
+hi default link chromaticaCallExpr Function
+hi default link chromaticaObjCMessageExpr Normal
+hi default link chromaticaBlockExpr Normal
+hi default link chromaticaMacroDefinition Macro
+hi default link chromaticaMacroInstantiation Macro
+hi default link chromaticaIntegerLiteral Number
+hi default link chromaticaFloatingLiteral Float
+hi default link chromaticaImaginaryLiteral Number
+hi default link chromaticaStringLiteral String
+hi default link chromaticaCharacterLiteral Character
+hi default link chromaticaPunctuation Normal
+hi default link chromaticaIf Conditional
+hi default link chromaticaSwitch Conditional
+hi default link chromaticaLoop Repeat
+hi default link chromaticaStatement Statement
+hi default link chromaticaType Type
+hi default link chromaticaBoolean Boolean
+hi default link chromaticaConstant Constant
+hi default link chromaticaCXXCast chromaticaCast
+hi default link chromaticaCStyleCast chromaticaCast
+hi default link chromaticaExceptionStatement chromaticaException
+hi default link chromaticaExceptionAttr chromaticaException
+hi default link chromaticaTypeAliasStatement Statement
+hi default link chromaticaFile Namespace
+hi default link chromaticaIncludedHeaderFile Namespace
+hi default link chromaticaFinalAttr Statement
+hi default link chromaticaOverrideAttr Statement
+hi default link chromaticaConstAttr Typedef
+hi default link chromaticaTypedef Typedef
+hi default link chromaticaStorageClass Statement
+hi default link chromaticaOperatorOverload OperatorOverload
+hi default link chromaticaAccessQual AccessQual
+hi default link chromaticaSpecifier Type
+hi default link chromaticaLinkage Linkage
+hi default link chromaticaAutoType AutoType
+hi default link chromaticaRegister Type
+hi default link chromaticaThreadLocal Type
+hi default link chromaticaRegister Type
+hi default link chromaticaRegister Type
+hi default link chromaticaConditionalOperator Todo
+" Microsoft
+hi default link chromaticaMSStatement Statement
+hi default link chromaticaOMP Namespace
+
+let b:chromatica_syntax_loaded = 1
