@@ -1,0 +1,361 @@
+2023-12-14 12:18:16,862 [INFO] [base.py line:92] mysql+pymysql://root:299563@172.17.0.5:3306/demoyard  engineID_140580590924608
+2023-12-14 12:18:16,877 [INFO] [base.py line:92] mysql+pymysql://root:299563@172.17.0.5:3306/demoyard  engineID_140580588557776
+2023-12-14 12:18:16,886 [INFO] [base.py line:174] Start delete all tables
+2023-12-14 12:18:16,886 [INFO] [base.py line:180] DROP TABLE IF EXISTS Containers0
+2023-12-14 12:18:16,897 [INFO] [base.py line:183] DROP TABLE IF EXISTS Containers0 done
+2023-12-14 12:18:16,910 [INFO] [base.py line:180] DROP TABLE IF EXISTS Yard_slot0
+2023-12-14 12:18:17,956 [INFO] [base.py line:183] DROP TABLE IF EXISTS Yard_slot0 done
+2023-12-14 12:18:18,128 [INFO] [base.py line:180] DROP TABLE IF EXISTS Yard_stack0
+2023-12-14 12:18:18,143 [INFO] [base.py line:183] DROP TABLE IF EXISTS Yard_stack0 done
+2023-12-14 12:18:18,163 [INFO] [base.py line:180] DROP TABLE IF EXISTS Yard_bay0
+2023-12-14 12:18:18,170 [INFO] [base.py line:183] DROP TABLE IF EXISTS Yard_bay0 done
+2023-12-14 12:18:18,188 [INFO] [base.py line:180] DROP TABLE IF EXISTS Containers_outyard0
+2023-12-14 12:18:18,192 [INFO] [base.py line:183] DROP TABLE IF EXISTS Containers_outyard0 done
+2023-12-14 12:18:18,216 [INFO] [base.py line:180] DROP TABLE IF EXISTS Yard_block0
+2023-12-14 12:18:18,221 [INFO] [base.py line:183] DROP TABLE IF EXISTS Yard_block0 done
+2023-12-14 12:18:18,372 [INFO] [core.py line:447] drop db done
+2023-12-14 12:18:19,810 [INFO] [base.py line:161] Create tables done
+2023-12-14 12:18:19,810 [INFO] [core.py line:456] init db done
+2023-12-14 12:18:19,815 [INFO] [core.py line:106] start yard vinit
+2023-12-14 12:18:19,817 [INFO] [core.py line:114] current row is block       51
+maxbay      86
+maxstack     6
+maxtier      5
+Name: 0, dtype: object
+2023-12-14 12:18:40,166 [INFO] [core.py line:114] current row is block       52
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 1, dtype: object
+2023-12-14 12:19:03,677 [INFO] [core.py line:114] current row is block       53
+maxbay      87
+maxstack     6
+maxtier      5
+Name: 2, dtype: object
+2023-12-14 12:19:24,908 [INFO] [core.py line:114] current row is block       54
+maxbay      88
+maxstack     6
+maxtier      5
+Name: 3, dtype: object
+2023-12-14 12:19:43,352 [INFO] [core.py line:114] current row is block       55
+maxbay      87
+maxstack     6
+maxtier      5
+Name: 4, dtype: object
+2023-12-14 12:20:02,817 [INFO] [core.py line:114] current row is block       56
+maxbay      93
+maxstack     6
+maxtier      5
+Name: 5, dtype: object
+2023-12-14 12:20:25,257 [INFO] [core.py line:114] current row is block       57
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 6, dtype: object
+2023-12-14 12:20:45,981 [INFO] [core.py line:114] current row is block       58
+maxbay      90
+maxstack     6
+maxtier      5
+Name: 7, dtype: object
+2023-12-14 12:21:07,655 [INFO] [core.py line:114] current row is block       59
+maxbay      90
+maxstack     6
+maxtier      5
+Name: 8, dtype: object
+2023-12-14 12:21:29,225 [INFO] [core.py line:114] current row is block       5A
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 42, dtype: object
+2023-12-14 12:21:51,698 [INFO] [core.py line:114] current row is block       5B
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 43, dtype: object
+2023-12-14 12:22:14,354 [INFO] [core.py line:114] current row is block       5E
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 44, dtype: object
+2023-12-14 12:22:37,344 [INFO] [core.py line:114] current row is block       5F
+maxbay      58
+maxstack     8
+maxtier      5
+Name: 45, dtype: object
+2023-12-14 12:22:55,798 [INFO] [core.py line:114] current row is block       5G
+maxbay      64
+maxstack     9
+maxtier      6
+Name: 46, dtype: object
+2023-12-14 12:23:18,316 [INFO] [core.py line:114] current row is block       5H
+maxbay      56
+maxstack    12
+maxtier      6
+Name: 47, dtype: object
+2023-12-14 12:23:42,226 [INFO] [core.py line:114] current row is block       5K
+maxbay      54
+maxstack     9
+maxtier      6
+Name: 48, dtype: object
+2023-12-14 12:24:01,056 [INFO] [core.py line:114] current row is block       5N
+maxbay      64
+maxstack     6
+maxtier      5
+Name: 49, dtype: object
+2023-12-14 12:24:16,606 [INFO] [core.py line:114] current row is block       5S
+maxbay      62
+maxstack     6
+maxtier      5
+Name: 50, dtype: object
+2023-12-14 12:24:34,526 [INFO] [core.py line:114] current row is block       61
+maxbay      81
+maxstack     6
+maxtier      5
+Name: 9, dtype: object
+2023-12-14 12:24:55,160 [INFO] [core.py line:114] current row is block       62
+maxbay      86
+maxstack     6
+maxtier      5
+Name: 10, dtype: object
+2023-12-14 12:25:16,457 [INFO] [core.py line:114] current row is block       63
+maxbay      86
+maxstack     6
+maxtier      5
+Name: 11, dtype: object
+2023-12-14 12:25:37,523 [INFO] [core.py line:114] current row is block       64
+maxbay      88
+maxstack     6
+maxtier      5
+Name: 12, dtype: object
+2023-12-14 12:25:59,934 [INFO] [core.py line:114] current row is block       65
+maxbay      90
+maxstack     6
+maxtier      5
+Name: 13, dtype: object
+2023-12-14 12:26:23,031 [INFO] [core.py line:114] current row is block       66
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 14, dtype: object
+2023-12-14 12:26:44,064 [INFO] [core.py line:114] current row is block       67
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 15, dtype: object
+2023-12-14 12:27:06,899 [INFO] [core.py line:114] current row is block       68
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 16, dtype: object
+2023-12-14 12:27:29,301 [INFO] [core.py line:114] current row is block       69
+maxbay      90
+maxstack     6
+maxtier      5
+Name: 17, dtype: object
+2023-12-14 12:27:52,004 [INFO] [core.py line:114] current row is block       6A
+maxbay      96
+maxstack     6
+maxtier      5
+Name: 51, dtype: object
+2023-12-14 12:28:14,635 [INFO] [core.py line:114] current row is block       6B
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 52, dtype: object
+2023-12-14 12:28:37,457 [INFO] [core.py line:114] current row is block       6C
+maxbay      88
+maxstack     6
+maxtier      5
+Name: 53, dtype: object
+2023-12-14 12:28:59,263 [INFO] [core.py line:114] current row is block       6F
+maxbay      98
+maxstack     8
+maxtier      6
+Name: 54, dtype: object
+2023-12-14 12:29:29,196 [INFO] [core.py line:114] current row is block       6G
+maxbay      89
+maxstack     9
+maxtier      6
+Name: 55, dtype: object
+2023-12-14 12:29:58,013 [INFO] [core.py line:114] current row is block       6H
+maxbay      92
+maxstack     9
+maxtier      6
+Name: 56, dtype: object
+2023-12-14 12:30:30,799 [INFO] [core.py line:114] current row is block       6M
+maxbay      94
+maxstack    19
+maxtier      6
+Name: 57, dtype: object
+2023-12-14 12:31:39,066 [INFO] [core.py line:114] current row is block       6N
+maxbay      67
+maxstack     6
+maxtier      5
+Name: 58, dtype: object
+2023-12-14 12:31:57,192 [INFO] [core.py line:114] current row is block       6S
+maxbay      68
+maxstack     6
+maxtier      5
+Name: 59, dtype: object
+2023-12-14 12:32:13,387 [INFO] [core.py line:114] current row is block       71
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 18, dtype: object
+2023-12-14 12:32:36,427 [INFO] [core.py line:114] current row is block       72
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 19, dtype: object
+2023-12-14 12:32:58,247 [INFO] [core.py line:114] current row is block       73
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 20, dtype: object
+2023-12-14 12:33:20,369 [INFO] [core.py line:114] current row is block       74
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 21, dtype: object
+2023-12-14 12:33:43,925 [INFO] [core.py line:114] current row is block       75
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 22, dtype: object
+2023-12-14 12:34:05,539 [INFO] [core.py line:114] current row is block       76
+maxbay      96
+maxstack     6
+maxtier      5
+Name: 23, dtype: object
+2023-12-14 12:34:30,434 [INFO] [core.py line:114] current row is block       77
+maxbay      96
+maxstack     6
+maxtier      5
+Name: 24, dtype: object
+2023-12-14 12:34:55,246 [INFO] [core.py line:114] current row is block       78
+maxbay      96
+maxstack     6
+maxtier      5
+Name: 25, dtype: object
+2023-12-14 12:35:18,459 [INFO] [core.py line:114] current row is block       79
+maxbay      82
+maxstack     6
+maxtier      5
+Name: 26, dtype: object
+2023-12-14 12:35:39,849 [INFO] [core.py line:114] current row is block       7A
+maxbay      96
+maxstack     6
+maxtier      5
+Name: 60, dtype: object
+2023-12-14 12:36:02,399 [INFO] [core.py line:114] current row is block       7L
+maxbay      88
+maxstack    19
+maxtier      6
+Name: 61, dtype: object
+2023-12-14 12:37:07,976 [INFO] [core.py line:114] current row is block       7M
+maxbay      72
+maxstack    19
+maxtier      6
+Name: 62, dtype: object
+2023-12-14 12:37:58,692 [INFO] [core.py line:114] current row is block       81
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 27, dtype: object
+2023-12-14 12:38:21,992 [INFO] [core.py line:114] current row is block       82
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 28, dtype: object
+2023-12-14 12:38:44,836 [INFO] [core.py line:114] current row is block       83
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 29, dtype: object
+2023-12-14 12:39:07,668 [INFO] [core.py line:114] current row is block       84
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 30, dtype: object
+2023-12-14 12:39:31,856 [INFO] [core.py line:114] current row is block       85
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 31, dtype: object
+2023-12-14 12:39:54,972 [INFO] [core.py line:114] current row is block       86
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 32, dtype: object
+2023-12-14 12:40:15,054 [INFO] [core.py line:114] current row is block       87
+maxbay      85
+maxstack     6
+maxtier      5
+Name: 33, dtype: object
+2023-12-14 12:40:33,893 [INFO] [core.py line:114] current row is block       88
+maxbay      93
+maxstack     6
+maxtier      5
+Name: 34, dtype: object
+2023-12-14 12:40:55,537 [INFO] [core.py line:114] current row is block       89
+maxbay      86
+maxstack     6
+maxtier      5
+Name: 35, dtype: object
+2023-12-14 12:41:15,468 [INFO] [core.py line:114] current row is block       8A
+maxbay      86
+maxstack     6
+maxtier      5
+Name: 63, dtype: object
+2023-12-14 12:41:36,654 [INFO] [core.py line:114] current row is block       8M
+maxbay      78
+maxstack    18
+maxtier      6
+Name: 64, dtype: object
+2023-12-14 12:42:26,767 [INFO] [core.py line:114] current row is block       91
+maxbay      84
+maxstack     6
+maxtier      5
+Name: 36, dtype: object
+2023-12-14 12:42:45,647 [INFO] [core.py line:114] current row is block       92
+maxbay      94
+maxstack     6
+maxtier      5
+Name: 37, dtype: object
+2023-12-14 12:43:09,266 [INFO] [core.py line:114] current row is block       96
+maxbay      82
+maxstack     6
+maxtier      5
+Name: 38, dtype: object
+2023-12-14 12:43:31,048 [INFO] [core.py line:114] current row is block       97
+maxbay      92
+maxstack     6
+maxtier      5
+Name: 39, dtype: object
+2023-12-14 12:43:51,974 [INFO] [core.py line:114] current row is block       98
+maxbay      84
+maxstack     6
+maxtier      5
+Name: 40, dtype: object
+2023-12-14 12:44:13,182 [INFO] [core.py line:114] current row is block       99
+maxbay      58
+maxstack     6
+maxtier      5
+Name: 41, dtype: object
+2023-12-14 12:44:29,179 [INFO] [core.py line:114] current row is block       9A
+maxbay      74
+maxstack     6
+maxtier      5
+Name: 65, dtype: object
+2023-12-14 12:44:48,618 [INFO] [core.py line:114] current row is block       9L
+maxbay      38
+maxstack    19
+maxtier      6
+Name: 66, dtype: object
+2023-12-14 12:45:13,693 [INFO] [core.py line:114] current row is block       9M
+maxbay      34
+maxstack    19
+maxtier      6
+Name: 67, dtype: object
+2023-12-14 12:45:37,820 [INFO] [core.py line:122] Initialize Yard_stack,  41663 rows 
+2023-12-14 12:45:37,824 [INFO] [core.py line:123] Initialize Yard_bay, 5808 rows 

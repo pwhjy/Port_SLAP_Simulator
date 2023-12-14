@@ -1,0 +1,18 @@
+2023-12-14 12:09:32,308 [INFO] [base.py line:92] mysql+pymysql://root:299563@172.17.0.5:3306/demoyard  engineID_139934025363760
+2023-12-14 12:09:32,325 [INFO] [base.py line:92] mysql+pymysql://root:299563@172.17.0.5:3306/demoyard  engineID_139934022996928
+2023-12-14 12:09:32,335 [INFO] [base.py line:174] Start delete all tables
+2023-12-14 12:09:32,335 [INFO] [base.py line:180] DROP TABLE IF EXISTS Containers0
+2023-12-14 12:09:32,358 [INFO] [base.py line:183] DROP TABLE IF EXISTS Containers0 done
+2023-12-14 12:09:32,461 [INFO] [base.py line:180] DROP TABLE IF EXISTS Yard_slot0
+2023-12-14 12:09:32,464 [INFO] [base.py line:183] DROP TABLE IF EXISTS Yard_slot0 done
+2023-12-14 12:09:32,567 [INFO] [base.py line:180] DROP TABLE IF EXISTS Yard_stack0
+2023-12-14 12:09:32,572 [INFO] [base.py line:183] DROP TABLE IF EXISTS Yard_stack0 done
+2023-12-14 12:09:32,626 [INFO] [base.py line:180] DROP TABLE IF EXISTS Yard_bay0
+2023-12-14 12:09:32,630 [INFO] [base.py line:183] DROP TABLE IF EXISTS Yard_bay0 done
+2023-12-14 12:09:32,638 [INFO] [base.py line:180] DROP TABLE IF EXISTS Containers_outyard0
+2023-12-14 12:09:32,641 [INFO] [base.py line:183] DROP TABLE IF EXISTS Containers_outyard0 done
+2023-12-14 12:09:32,656 [INFO] [base.py line:180] DROP TABLE IF EXISTS Yard_block0
+2023-12-14 12:09:32,658 [INFO] [base.py line:183] DROP TABLE IF EXISTS Yard_block0 done
+2023-12-14 12:09:32,813 [INFO] [core.py line:446] drop db done
+2023-12-14 12:09:33,966 [INFO] [base.py line:161] Create tables done
+2023-12-14 12:09:33,966 [INFO] [core.py line:455] init db done

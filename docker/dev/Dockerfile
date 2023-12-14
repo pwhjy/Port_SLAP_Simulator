@@ -1,4 +1,4 @@
-FROM nvidia/opengl:base-ubuntu20.04
+FROM ubuntu:22.04
 
 WORKDIR /tmp
 
@@ -42,7 +42,6 @@ RUN apt clean && \
     libfuse2 \
     openssh-server \
     cmake \
-    qt5-default \
     libqt5svg5-dev \
     libpulse0
 

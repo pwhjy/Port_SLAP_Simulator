@@ -1,7 +1,7 @@
 <h1 align="center">🚢 Port Simulation 🚛 </h1>
 
 <h3 align="center">
-    <p>一个用于研究港口集装箱存储位置分配的仿真平台</p>
+    <p>"A simulation platform for studying the allocation of container storage positions in ports."</p>
 </h3>
 <p align="center">
     <a href="https://github.com/OpenBMB/AgentVerse/blob/main/LICENSE">
