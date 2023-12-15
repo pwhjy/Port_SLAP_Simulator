@@ -11,6 +11,7 @@ from simulation.DataBase.base import DB0, BlockForDB, BerthForDB
 from simulation.DataBase.block_selectorSA import Block_selector
 from simulation.DataBase.utils.yard_fea_cache import *
 from simulation.DataBase.utils.stack_mask import *
+from simulation.DataBase.utils.reward_calculator import *
 
 class DB(DB0):
     """simulate yard
