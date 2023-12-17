@@ -12,10 +12,10 @@ class PortSim(object):
         super(PortSim, self).__init__()
         self.config_path = config_path
         self.DataCore = DB(self.config_path)
-        # if reInit:
-            # self.DataCore.Initall()
-        # else:
-            # self.DataCore.reset(cpsql=True)
+        if reInit:
+            self.DataCore.Initall()
+        else:
+            self.DataCore.reset(cpsql=True)
         cf = configparser.ConfigParser()
         cf.read(self.config_path, "utf-8")
 
@@ -70,7 +70,7 @@ class PortSim(object):
             "candidate_slots": [],
         }
         if self.next_container.vessel == self.target_vessel:
-            next_state["candidate_block"] = self._get_available_block_list(next_container=True)
+            next_state["candidate_blocks"] = self._get_available_block_list(next_container=True)
         self._get_container()
         return next_state, reward_higher, reward_lower, done, rewards
 
@@ -137,6 +137,69 @@ class PortSim(object):
         }
         return state
 
+    def cal_block_reward(
+        self,
+        block,
+    ):
+        block_features = self.DataCore.cal_yard_features_block(self.target_vessel, block)
+        # reward = -1 * block_features[0] * self.final_block_weights_diff + -1 * (
+        #             block_features[1]) * self.final_block_concentration
+        reward = -1 * block_features[0] * self.final_block_weights_diff
+        return reward, {"fi_weights": block_features[0], "fi_concentration": block_features[1]}
+    
+    def invalid_block_mask(
+        self,
+        container,
+        blocks_list,
+    ):
+        blocks_list = list(blocks_list.values())
+        mask = []
+        if container.size == 1:
+            mask = [0 if block[6] < 1 else 1 for block in blocks_list]
+        else:
+            mask = [0 if block[7] < 1 else 1 for block in blocks_list]
+        mask = np.array(mask)
+        mask = 1 - mask
+        return mask, blocks_list
+    
+    def get_available_slot_list_in_block(
+        self,
+        container,
+        block,
+    ):
+        slots_list = {}
+        if container == 0:
+            logging.debug("Container is None, get available slot list failed")
+            return slots_list
+        candidate_slots = None
+        if block is not None:
+            candidate_slots, _, _, _ = self.DataCore.get_candidate_slots_all_mask(container, block=block)  # 带mask的全部箱位
+            slots_fea = self.DataCore.cal_slot_features_cache_allblock(container, block=block)  ###
+            slots_list = dict(zip(candidate_slots, list(slots_fea)))
+        return slots_list
+
+    def invalid_slot_mask(
+        self,
+        container,
+        slots_list,
+        block_action,
+    ):
+        """  
+        将所有非法动作作MASK处理  
+        非法动作包括：上层模型输出的约束箱区外的所有位置；不符合尺寸要求的位置等。  
+        输出按照输入的slots_list的顺序
+        """
+        candidate_slot_in_block_action, _, _, mask = self.DataCore.get_candidate_slots_all_mask(
+            container, block_action)
+
+        merged_dict = {k: v for k, v in zip(candidate_slot_in_block_action, mask)}
+
+        mask_return = [merged_dict.get(candidate_slot, 0) for candidate_slot in slots_list]
+        mask_return = np.array(mask_return)
+        mask_return = 1 - mask_return
+        slots_list_value = list(slots_list.values())
+        return mask_return, slots_list_value
+
     def _cal_Rewards(
         self,
         vessel,
@@ -158,7 +221,6 @@ class PortSim(object):
         vessel,
     ):
         # 落位的是最后一个箱子，计算全局reward
-        logging.info("last container cal final rewards")
         yard_features = self.DataCore.cal_yard_features_cache(vessel=vessel)
 
         fea_blocks = sum(v[0] for v in yard_features.values())
@@ -167,12 +229,15 @@ class PortSim(object):
         fea_concentration = sum(v[3] for v in yard_features.values())
         fea_Density = sum(v[4] for v in yard_features.values())
 
-        reward_lower = -1 * self.final_weights_diff * fea_weights + -1 * (
-                    self.final_concentration) * fea_concentration
+        # reward_lower = -1 * self.final_weights_diff * fea_weights + -1 * (
+        #             self.final_concentration) * fea_concentration
+        # reward_higher = -1 * self.final_block_Equilibrium * fea_blocks + \
+        #                 self.final_berth_block * Berth_block + \
+        #                 -1 * self.final_block_density * fea_Density + \
+        #                 self.final_lower_to_higher * reward_lower
+        reward_lower = -1 * self.final_weights_diff * fea_weights
         reward_higher = -1 * self.final_block_Equilibrium * fea_blocks + \
-                        self.final_berth_block * Berth_block + \
-                        -1 * self.final_block_density * fea_Density + \
-                        self.final_lower_to_higher * reward_lower
+                        self.final_berth_block * Berth_block
 
         return 0, reward_higher, {"fi_blocks": fea_blocks, "fi_Berth_block": Berth_block, "fi_weights": fea_weights,
                                   "fi_concentration": fea_concentration, "fi_Density": fea_Density}
@@ -192,11 +257,14 @@ class PortSim(object):
         fea_concentration = yard_rewards[3]
         fea_block_density = yard_rewards[4]
 
-        reward_lower = fea_weight_diff * self.immediate_weight_diff + fea_concentration * self.immediate_concentration
+        # reward_lower = fea_weight_diff * self.immediate_weight_diff + fea_concentration * self.immediate_concentration
+        # reward_higher = fea_block_Equilibrium * self.immediate_block_Equilibrium + \
+        #                 fea_berth_block * self.immediate_berth_block + \
+        #                 reward_lower * self.immediate_lower_to_higher + \
+        #                 fea_block_density * self.immediate_block_density
+        reward_lower = fea_weight_diff * self.immediate_weight_diff
         reward_higher = fea_block_Equilibrium * self.immediate_block_Equilibrium + \
-                        fea_berth_block * self.immediate_berth_block + \
-                        reward_lower * self.immediate_lower_to_higher + \
-                        fea_block_density * self.immediate_block_density
+                        fea_berth_block * self.immediate_berth_block
 
         return reward_lower, reward_higher, {"im_block_Equilibrium": fea_block_Equilibrium,
                                              "im_berth_block": fea_berth_block, "im_weight_diff": fea_weight_diff,

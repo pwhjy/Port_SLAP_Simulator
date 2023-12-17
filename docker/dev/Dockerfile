@@ -67,8 +67,9 @@ RUN python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple \
     simple_watchdog_timer==0.1.1 \
     jsondiff==1.3.0 \
     shapely==1.8.0 \
-    configparser==5.2.0 \
-    torch==1.12.0
+    configparser==5.2.0
+
+RUN pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu121
 
 RUN python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple \
     pandas==1.5.1 \
