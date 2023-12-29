@@ -34,12 +34,58 @@ class PortSimBuffer(object):
 
         self.final_block_weights_diff = float(cf.get("Reward", "final_block_weights_diff"))
         self.final_block_concentration = float(cf.get("Reward", "final_block_concentration"))
-        self.target_vessel = cf.get("VESSEL", "target_vessel")
+        self.target_vessel = cf.get("VESSEL", "target_vessel")        
+
+    def step(
+        self,
+        action,
+    ):
+        next_state, reward_higher, reward_lower, done, rewards = self._step(action)
+        return next_state, reward_higher, reward_lower, done, rewards
+
+    def reset(
+        self,
+    ):
+        self.DataCore.reset()
+        next_container_list = self._get_container_ten()
+        state = {
+            "container_list": next_container_list,
+            "cur_stack": self._get_cur_stack()
+        }
+        return state
+
+    def _get_cur_stack(
+        self,
+    ):
+        """
+        返回stack的特征
+        """
+        return []
+
+    def _get_container_ten(
+        self,
+    ):
+        """
+        提供接下来的十个集装箱，如果剩下不足10个，就有几个返回几个，一个都没有的话，返回None
+        """
+        container_list = self.DataCore.next_ten_container()
+        if len(container_list) < 10:
+            logging.info("container_list left smaller than 10")
+        elif len(container_list) == 10:
+            logging.info("container_list length is 10")
+        else:
+            logging.info("WRONG!!!!!")
+        return container_list
+
+    def _cal_Rewards(
+        self,
+        vessel,
+    ):
+        pass
 
     def _step(
         self,
         action,
-        random_action=False,
     ):
         """
         原先的action是一个container和一个candidate_slot_action:
@@ -47,6 +93,7 @@ class PortSimBuffer(object):
         现在是n个container和n和candidate_slot_action
             e.g. {container1:candidate_slot_action1, ..., containern:candidate_slot_actionn}
         """
+
         # 遍历dict并落位
         for key, value in action.items():
             outcons = self.DataCore.updata_and_slot(key, value)
@@ -54,29 +101,14 @@ class PortSimBuffer(object):
         reward_lower = 0.0
         rewards = []
         done = 0
-
-    def step(
-        self,
-        action,
-    ):
-        pass
-
-    def reset(
-        self,
-    ):
-        self.DataCore.reset()
-        self.
-
-    def _get_container_ten(
-        self,
-    ):
-        container_list = []
-        cur_container, next_container = self.DataCore.cur_container()
-        while type(cur_container) != int and type(next_container) != int \
-                                        and len(container_list) <= 10:
-            container_list.append(cur_container)
-            logging.info("container list add new container {}".format(cur_container))
-            cur_container, next_container = self.DataCore.cur_container()
-        if len(container_list) < 10:
-            container_list.append(cur_container)
-        return container_list
+        container = list(action.keys())[-1]
+        container = list(action.values())[-1]
+        reward_lower, reward_higher, rewards = self._cal_Rewards(vessel=self.target_vessel)
+        next_container_list = self._get_container_ten()
+        if next_container_list is None:
+            done = 1
+        next_state = {
+            "container_list": next_container_list,
+            "cur_stack": self._get_cur_stack()
+        }
+        return next_state, reward_higher, reward_lower, done, rewards

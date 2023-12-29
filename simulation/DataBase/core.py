@@ -592,7 +592,26 @@ class DB(DB0):
                 logging.info(f"Only one container {current_container1.ctn_no} left")
         return current_container1, current_container2
 
-
+    def next_ten_container(self):
+        current_containers  = self.session.query(Containers_outyard)\
+                                          .order_by(Containers_outyard.order).limit(10).all()
+        container_list = None
+        if len(current_containers) == 0:
+            logging.info(f"No container left")
+            return container_list
+        else:
+            exist_bool = False
+            for i in range(len(current_containers)):
+                existed = self.session.query(Containers.ctn_no).filter(Containers.ctn_no == current_containers[i].ctn_no).first()
+                if existed:
+                    exist_bool = True
+                    logging.info(f"skip {current_containers[i].ctn_no} which existed in the yard")
+                    self.del_rows(Containers_outyard, Containers_outyard.ctn_no == current_containers[i].ctn_no)
+            if exist_bool:
+                container_list = self.current_container()
+            else:
+                container_list = current_containers
+        return container_list
 
     def get_candidate_slots_all_mask(self, current_container, block = None):
         """
