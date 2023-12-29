@@ -252,8 +252,15 @@ class MIP_solver(object):
         #
         self.set_Obiective()
         #
+        # self.model.write("MIP.ilp")
+        self.model.Params.TimeLimit = 360
+        # self.model.Params.MIPGap = self.MIPGap
         self.model.optimize()
-        #
+        if self.model.status == GRB.INFEASIBLE:
+            self.model.computeIIS()
+            conflicts = self.model.getAttr("IISConflict")
+            for conflict in conflicts:
+                print(conflict)
         Solution = self.parse_Solution()
         return Solution
 
