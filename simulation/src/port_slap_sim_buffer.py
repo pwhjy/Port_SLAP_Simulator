@@ -34,7 +34,8 @@ class PortSimBuffer(object):
 
         self.final_block_weights_diff = float(cf.get("Reward", "final_block_weights_diff"))
         self.final_block_concentration = float(cf.get("Reward", "final_block_concentration"))
-        self.target_vessel = cf.get("VESSEL", "target_vessel")        
+        self.target_vessel = cf.get("VESSEL", "target_vessel")
+        self.block_list = cf.get("BLOCK", self.target_vessel)      
 
     def step(
         self,
@@ -53,6 +54,59 @@ class PortSimBuffer(object):
             "cur_stack": self._get_cur_stack()
         }
         return state
+    
+    def invalid_block_mask(
+        self,
+        container,
+        blocks_list,
+    ):
+        blocks_list = list(blocks_list.values())
+        mask = []
+        if container.size == 1:
+            mask = [0 if block[6] < 1 else 1 for block in blocks_list]
+        else:
+            mask = [0 if block[7] < 1 else 1 for block in blocks_list]
+        mask = np.array(mask)
+        mask = 1 - mask
+        return mask, blocks_list
+    
+    def get_available_slot_list_in_block(
+        self,
+        container,
+        block,
+    ):
+        slots_list = {}
+        if container == 0:
+            logging.debug("Container is None, get available slot list failed")
+            return slots_list
+        candidate_slots = None
+        if block is not None:
+            candidate_slots, _, _, _ = self.DataCore.get_candidate_slots_all_mask(container, block=block)  # 带mask的全部箱位
+            slots_fea = self.DataCore.cal_slot_features_cache_allblock(container, block=block)  ###
+            slots_list = dict(zip(candidate_slots, list(slots_fea)))
+        return slots_list
+    
+    def invalid_slot_mask(
+        self,
+        container,
+        slots_list,
+        block_action,
+    ):
+        """  
+        将所有非法动作作MASK处理  
+        非法动作包括：上层模型输出的约束箱区外的所有位置；不符合尺寸要求的位置等。  
+        输出按照输入的slots_list的顺序
+        """
+        candidate_slot_in_block_action, _, _, mask = self.DataCore.get_candidate_slots_all_mask(
+            container, block_action)
+
+        merged_dict = {k: v for k, v in zip(candidate_slot_in_block_action, mask)}
+
+        mask_return = [merged_dict.get(candidate_slot, 0) for candidate_slot in slots_list]
+        mask_return = np.array(mask_return)
+        mask_return = 1 - mask_return
+        slots_list_value = list(slots_list.values())
+        return mask_return, slots_list_value
 
     def _get_cur_stack(
         self,
@@ -79,9 +133,36 @@ class PortSimBuffer(object):
 
     def _cal_Rewards(
         self,
-        vessel,
+        curcon=None,
+        slot=None,
+        done=False,
     ):
-        pass
+        if done:
+            reward_lower, reward_higher, rewards = self._cal_final_Reward()
+            reward_lower_imme, reward_higher_imme, rewards_imme = self._cal_immediate_reward()
+            rewards.update(rewards_imme)
+            return reward_lower + reward_lower_imme, reward_higher + reward_higher_imme, rewards
+        else:
+            return self._cal_immediate_reward()
+
+    def _cal_immediate_reward(
+        self,
+        curcon,
+        slot,
+    ):
+        yard_rewards = self.DataCore.cal_immediate_yard_features_cache(curcon, slot)
+        fea_block_Equilibrium = yard_rewards[0]
+        fea_weight_diff = yard_rewards[2]
+        reward_lower = fea_weight_diff * self.immediate_weight_diff
+        reward_higher = fea_block_Equilibrium * self.immediate_block_Equilibrium
+        return reward_lower, reward_higher, {"im_block_Equilibrium": fea_block_Equilibrium,
+                                              "im_weight_diff": fea_weight_diff}
+
+    def _cal_final_Reward(
+        self,
+    )
+        # 落位的是最后一个箱子，计算全局reward
+        yard_features = self.DataCore.cal_yard_features_cache(vessel=self.target_vessel)
 
     def _step(
         self,
@@ -93,17 +174,16 @@ class PortSimBuffer(object):
         现在是n个container和n和candidate_slot_action
             e.g. {container1:candidate_slot_action1, ..., containern:candidate_slot_actionn}
         """
-
-        # 遍历dict并落位
-        for key, value in action.items():
-            outcons = self.DataCore.updata_and_slot(key, value)
         reward_higher = 0.0
         reward_lower = 0.0
         rewards = []
         done = 0
-        container = list(action.keys())[-1]
-        container = list(action.values())[-1]
-        reward_lower, reward_higher, rewards = self._cal_Rewards(vessel=self.target_vessel)
+        # 遍历dict并落位
+        for key, value in action.items():
+            outcons = self.DataCore.updata_and_slot(key, value)
+            reward_lower, reward_higher, rewards = self._cal_Rewards(key, value)
+            reward_higher += reward_higher
+            reward_lower += reward_lower
         next_container_list = self._get_container_ten()
         if next_container_list is None:
             done = 1
@@ -112,3 +192,4 @@ class PortSimBuffer(object):
             "cur_stack": self._get_cur_stack()
         }
         return next_state, reward_higher, reward_lower, done, rewards
+    

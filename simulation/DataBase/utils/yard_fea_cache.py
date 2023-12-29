@@ -216,7 +216,9 @@ class Yard_cache(object):
             return [block_Equilibrium, berth_block, weight_diff, concentration, block_overflow]
         else:
             return [0,0,0,0,0]
-
+        
+    def get_immediate_reward_ten(self, vessel, block):
+        pass
 
     def get_block_feas(self,curcon, block):
         """
