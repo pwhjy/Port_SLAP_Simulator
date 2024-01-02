@@ -1198,6 +1198,7 @@ class DB(DB0):
 
         features = []
         for b in Block:
+            allblock_tier_weight_features = self.Yard_cache.blocks[b].get_allblock_tier_weight_features(curcon) #  tier，max_weight, min_weight, mean_weight
             allblock_features = self.Yard_cache.blocks[b].get_allblock_features(curcon)
             # block_busyness = self.Code_simulator.get_blockcode(b) * np.ones((len(allblock_features), 1), dtype=int) ###
             # block_id = decode_block(b) * np.ones((len(allblock_features), 1), dtype=int)

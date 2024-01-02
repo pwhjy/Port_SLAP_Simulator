@@ -343,6 +343,20 @@ class block_cache(object):
         allfeas = np.concatenate((bayfeas), axis=0)
         return allfeas
 
+    def get_allblock_tier_weight_features(self, curcon):
+        """
+        获取箱区内每一列的层数和重量相关特征
+        """
+        bayfeas = []
+        for bay in range(1, self.maxbay + 1):
+            allbay_fea = self.bays[bay].get_allbay_tier_weight_features() if bay in self.bays \
+                else np.array([-2] * 4) *  np.ones((self.stacknum, 1), dtype=int)
+            bayfeas.append(allbay_fea)
+        allfeas = np.concatenate((bayfeas), axis=0)
+        return allfeas
+
+
+
 
 class bay_cache(object):
     def __init__(self, vesselid, block, bay, stacknum = 5, maxtier = 6, weightclass = 12):
@@ -424,6 +438,20 @@ class bay_cache(object):
             stack_vessel_tier = [int(v==vessel) if v > -1 else -1 for v in self.bayvessel_tier[stack,1:]]
             Stack_vessel_tier.append(stack_vessel_tier)
         allfeatures = np.concatenate((stack_sum, stack_vessel, stack_weight, np.array(Stack_vessel_tier)), axis=1)
+        return allfeatures
+
+    def get_allbay_tier_weight_features(self):
+        """
+        获取贝内每一列的层数和重量相关特征
+        （没有区分航线，但是因为测试航线只有一条所以效果相同）
+        """
+        stack_sum = self.bayvessel[1:, -1].reshape(-1,1)  # 4  列内箱数
+        bay_weight_feature = []
+        for stack_weight_tier in self.bayweight_tier[1:, 1:]:
+            stack_weight = stack_weight_tier[stack_weight_tier > 0] # 非测试航线箱子weight为 -1
+            stack_weight_feature = [np.max(stack_weight), np.min(stack_weight), np.mean(stack_weight)] if len(stack_weight)>0 else [-1,-1,-1]
+            bay_weight_feature.append(stack_weight_feature)
+        allfeatures = np.concatenate((stack_sum, np.array(bay_weight_feature)), axis=1)
         return allfeatures
 
 
