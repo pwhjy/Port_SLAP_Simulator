@@ -564,6 +564,114 @@ class DB(DB0):
         self.candidate_slots = pickle.load(open(self.candidate_slots_path, "rb"))
         logging.info(f"Load Slot_cache.pkl done")
 
+    def init_instance_for_baseline(self):
+        """
+        用于baseline的agent初始化信息
+        """
+        # # ================== input
+        vessel_in_buffer = list(self.block.keys())  # test vessel 只有一个
+
+        # ===== Contaienrs_in_buffer  buffer中集装箱的属性 {container_id: [ vessel(~str) , weight(~int), size(~int)]}
+        next_ten_container = self.next_ten_container()
+        Contaienrs_in_buffer = {con.ctn_no: [con.vessel, con.weight, int(con.size)] for con in next_ten_container}
+        # print(Contaienrs_in_buffer)
+
+        # ===== Contaienrs_available_slot
+        # 每个集装箱可用的列信息 { vessel: {block:  { size: slot_positions(~array) } } }
+        # 每一个slot_position格式为 [block, bay, stack, tier] 其中tier为已有的层数信息而非可放置层
+        # ===== Coninfo_lowerstack
+        # 每个可用箱位下方的(与buffer中航线相关的)集装箱信息  { vessel: {block:  { size: stack_info(~array) } } }
+        # stack_info 和 slot_position 顺序是对应的
+        # 每一个stack_info 内容为 [ tier1的箱重, tier2的箱重, tier3的箱重, tier4的箱重, tier5的箱重, tier6的箱重 ], 箱重为-1 表示非vessel航线或空位无箱
+        Contaienrs_available_slot = {}
+        Coninfo_lowerstack = {}
+        for vessel in vessel_in_buffer:
+            Contaienrs_available_slot[vessel] = {}
+            Coninfo_lowerstack[vessel] = {}
+            for block in self.block[vessel]:
+                mask40teu = np.array(self.candidate_slots[block]["slots_mask"]["40teu"]) == 1
+                mask20teu = np.array(self.candidate_slots[block]["slots_mask"]["20teu"]) == 1
+                #
+                Contaienrs_available_slot[vessel][block] = {}
+                available_slot_40teu = np.array(self.candidate_slots[block]["candidate_stacks"])[mask40teu]
+                available_slot_20teu = np.array(self.candidate_slots[block]["candidate_stacks"])[mask20teu]
+                Contaienrs_available_slot[vessel][block]["40teu"] = available_slot_40teu
+                Contaienrs_available_slot[vessel][block]["20teu"] = available_slot_20teu
+                #
+                Coninfo_lowerstack[vessel][block] = {}
+                lowerstack_40teu = self.Yard_cache.get_tier_weight_for_diff(block)[mask40teu]
+                lowerstack_20teu = self.Yard_cache.get_tier_weight_for_diff(block)[mask20teu]
+                Coninfo_lowerstack[vessel][block]["40teu"] = lowerstack_40teu
+                Coninfo_lowerstack[vessel][block]["20teu"] = lowerstack_20teu
+        # print(Contaienrs_available_slot)
+        # print(Coninfo_lowerstack)
+
+        # ===== Contaienrs_num_in_block  每条航线当前在不同箱区的总数 {vessel: { block: connum }}
+        # block 为航线v的预期分布箱区
+        Contaienrs_num_in_block = {vessel:
+                                       {block:
+                                            self.Yard_cache.blocks_vesssel[
+                                                self.Yard_cache.blockid[block], self.Yard_cache.vesselid[vessel]]
+                                        for block in self.block[vessel]}
+                                   for vessel in vessel_in_buffer}
+        # print(Contaienrs_num_in_block)
+
+        # ===== Sumdiff 每条航线当前在堆场的总翻箱数 {vessel: diff}
+        Sumdiff = {vessel:
+                       self.Yard_cache.weight_diff[self.Yard_cache.vesselid[vessel]]["sumdiff"]
+                   for vessel in vessel_in_buffer}
+        # print(Sumdiff)
+
+        # # ================== check
+        # ===== Baylimit 每个贝位可用的剩余箱位数量 {block:  { bay: baylimit(~int) } }
+        Baylimit = {}
+        vessel = vessel_in_buffer[0]
+        for block in self.block[vessel]:
+            Baylimit[block] = {}
+            filter = sa.and_(Yard_bay.block == block, Yard_bay.exist)
+            baylimit = self.session.query(Yard_bay.bay, (Yard_bay.limit - Yard_bay.sum_ctn)).filter(filter).all()
+            Baylimit[block].update(baylimit)
+
+        # print(Baylimit)
+
+        # ===== size_confilct 可能因为放入新箱相互冲突的贝位 {block: [ confilct_bays(~list)]}
+        # 这种潜在的冲突只存在于 Yard_bay.sum_ctn = 0 的可用bay之间, confilct_bays内最多同时有一个bay被使用(但是可以放入多个集装箱)
+        def find_complete_subgraphs(graph):
+            G = nx.Graph(graph)
+            cliques = nx.find_cliques(G)
+            unique_cliques = []
+            for clique in cliques:
+                is_unique = True
+                for unique_clique in unique_cliques:
+                    if set(clique).issubset(set(unique_clique)):
+                        is_unique = False
+                        break
+                if is_unique and len(clique) > 1:
+                    unique_cliques.append(clique)
+            return unique_cliques
+
+        size_confilct = {}
+        vessel = vessel_in_buffer[0]
+        for block in self.block[vessel]:
+            filter = sa.and_(Yard_bay.block == block, Yard_bay.exist, Yard_bay.sum_ctn == 0)
+            vacant_bays = self.session.query(Yard_bay.bay).filter(filter).all()
+            risky_bays = [bay[0] for bay in vacant_bays]
+            #
+            conflict_graph = {}
+            for i in range(len(risky_bays)):
+                conflict_graph[risky_bays[i]] = []
+                for j in range(len(risky_bays)):
+                    if abs(risky_bays[i] - risky_bays[j]) <= (2 - risky_bays[i] % 2) and risky_bays[i] != risky_bays[j]:
+                        conflict_graph[risky_bays[i]].append(risky_bays[j])
+            confilct_bays_list = find_complete_subgraphs(conflict_graph)
+            if len(confilct_bays_list) > 0:
+                size_confilct[block] = confilct_bays_list
+                # print(risky_bays, conflict_graph, confilct_bays_list)
+        # print(size_confilct)
+        return (
+        Contaienrs_in_buffer, Contaienrs_available_slot, Coninfo_lowerstack, Contaienrs_num_in_block, Sumdiff, Baylimit,
+        size_confilct)
+
     def current_container(self):
         """
         提取下一个、下下个进场的集装箱
