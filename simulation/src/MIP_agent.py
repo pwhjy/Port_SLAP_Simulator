@@ -22,12 +22,13 @@ class Instance_buffer(object):
         self.Contaienrs_num_in_block = {}  # 每条航线当前在不同箱区的总数 vessel: { block: connum } block 为vessel对应的全部适配箱区
         self.Baylimit = {} # 每个贝位可用的剩余箱位数量 {block:  { bay: baylimit(~int) } }
         self.size_confilct = {} # 可能因为放入新箱相互冲突的贝位 {block: [ confilct_bays(~list)]}  存储完整的贝位冲突情况, 涉及的bay多于Slot_available_contaienrs_bay中的
+
         self.Coninfo_lowerstack = {} # 每个可用箱位下方的(与buffer中航线相关的)集装箱信息 slot_position: [ (tier(~int)), weight(~int)) ] tier降序排列
 
-        self.Conattr_available_slot_block = {}  # { vessel: { size: { block: [ slot_position ] } }}
-        self.Contaienrs_available_slot = {}  # 每个集装箱可用的列信息 container_id: {  block: [ slot_position(~list) ] } 其中tier为已有的层数信息
-        self.Conattr_available_slot_bay = {}  # { vessel: { size: { block: { bay: [ slot_position ] } } }}
-        self.Contaienrs_available_slot_bay = {}  # 每个集装箱可用的列信息 container_id: {  block: {bay: [ slot_position(~list) ] }} 其中tier为已有的层数信息
+        self.Conattr_available_slot_block = {}  ## { vessel: { size: { block: [ slot_position ] } }}
+        self.Contaienrs_available_slot = {}  ## 每个集装箱可用的列信息 container_id: {  block: [ slot_position(~list) ] } 其中tier为已有的层数信息
+        self.Conattr_available_slot_bay = {}  ### { vessel: { size: { block: { bay: [ slot_position ] } } }}
+        self.Contaienrs_available_slot_bay = {}  ### 每个集装箱可用的列信息 container_id: {  block: {bay: [ slot_position(~list) ] }} 其中tier为已有的层数信息
 
         # # ========== 处理后的数据(用于构建MIP)  ## 位置索引只包含buffer中集装箱实际可以放置的位置
         self.Vessel_container = {}  # buffer中某条航线相关的集装箱id vessel: [ container_id(~str) ]
@@ -72,17 +73,25 @@ class Instance_buffer(object):
                 for size, slot_positions_array in Contaienrs_available_slot[vessel][block].items():
                     size = 1 if size == "20teu" else 2
                     slot_positions_array = slot_positions_array[:, 1:].astype(int)
-                    self.Conattr_available_slot_block[vessel][size][block] = slot_positions_array.tolist()
+                    # 随机选取一部分可用位置(减少决策变量数目, 防止超过学生版的gurobi规模)
+                    slot_num = slot_positions_array.shape[0]
+                    slot_left_num = np.random.randint(15, 24) # todo 确定合适的数量以保证总数始终不超过决策变量上限
+                    random_indices = np.random.choice(slot_num, size = min(slot_left_num, slot_num), replace = False)
+                    random_indices.sort()
+                    slot_positions_array = slot_positions_array[random_indices, :]
+                    #
+                    self.Conattr_available_slot_block[vessel][size][block] = slot_positions_array.tolist() #
+                    #
                     bay_groups_array = np.split(slot_positions_array, np.unique(slot_positions_array[:, 0], return_index=True)[1][1:])
                     self.Conattr_available_slot_bay[vessel][size][block] = {}
                     for bay_group_array in bay_groups_array:
                         bay = bay_group_array[0,0]
-                        self.Conattr_available_slot_bay[vessel][size][block][bay] = bay_group_array.tolist()
+                        self.Conattr_available_slot_bay[vessel][size][block][bay] = bay_group_array.tolist() #
         #
         for container_id, container_info  in self.Contaienrs_in_buffer.items():
             vessel, size = container_info[0], container_info[2]
-            self.Contaienrs_available_slot[container_id] = self.Conattr_available_slot_block[vessel][size]
-            self.Contaienrs_available_slot_bay[container_id] = self.Conattr_available_slot_bay[vessel][size]
+            self.Contaienrs_available_slot[container_id] = self.Conattr_available_slot_block[vessel][size] #
+            self.Contaienrs_available_slot_bay[container_id] = self.Conattr_available_slot_bay[vessel][size] #
         # print(self.Contaienrs_available_slot)
         # print(self.Conattr_available_slot_bay)
         logging.info(f"Input cache for instance done")
@@ -429,7 +438,7 @@ class MIP_solver(object):
         #
         self.set_Obiective()
         #
-        self.model.Params.TimeLimit = 360
+        # self.model.Params.TimeLimit = 360
         self.model.setParam('OutputFlag', 0)
         self.model.optimize()
         if self.model.status == GRB.INFEASIBLE:
@@ -443,7 +452,7 @@ class MIP_solver(object):
         else:
             # self.model.write("MIP.lp")
             Solution = self.parse_Solution()
-        logging.info(f"--------------------- Solution = {Solution}")
+        logging.info(f"Solution = {Solution}")
         return Solution
 
 
