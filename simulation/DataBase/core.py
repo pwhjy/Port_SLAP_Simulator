@@ -700,9 +700,9 @@ class DB(DB0):
                 logging.info(f"Only one container {current_container1.ctn_no} left")
         return current_container1, current_container2
 
-    def next_ten_container(self):
-        current_containers  = self.session.query(Containers_outyard)\
-                                          .order_by(Containers_outyard.order).limit(10).all()
+    def next_ten_container(self, num=10):
+        current_containers = self.session.query(Containers_outyard) \
+            .order_by(Containers_outyard.order).limit(num).all()
         container_list = None
         if len(current_containers) == 0:
             logging.info(f"No container left")
@@ -710,7 +710,8 @@ class DB(DB0):
         else:
             exist_bool = False
             for i in range(len(current_containers)):
-                existed = self.session.query(Containers.ctn_no).filter(Containers.ctn_no == current_containers[i].ctn_no).first()
+                existed = self.session.query(Containers.ctn_no).filter(
+                    Containers.ctn_no == current_containers[i].ctn_no).first()
                 if existed:
                     exist_bool = True
                     logging.info(f"skip {current_containers[i].ctn_no} which existed in the yard")
