@@ -14,7 +14,7 @@ import pandas as pd
 
 
 class Instance_buffer(object):
-    def __init__(self, input):
+    def __init__(self, input, ratio = 1):
 
         # # ========== 外部数据
         self.Contaienrs_in_buffer = {} # buffer中每个集装箱的属性信息 container_id: [ vessel(~str) , weight(~int), size(~int)]
@@ -38,11 +38,11 @@ class Instance_buffer(object):
         self.Slot_available_contaienrs_bay = {}  # 每个箱位允许存放的集装箱id  block: { bay: {slot_position: [container_id]} }
 
         # # ==========
-        self.input_cache_from_env(input)
+        self.input_cache_from_env(input, ratio)
         self.bulid_instance()
 
 
-    def input_cache_from_env(self, input):
+    def input_cache_from_env(self, input, ratio):
         Contaienrs_in_buffer, Contaienrs_available_slot, Coninfo_lowerstack, Contaienrs_num_in_block, Sumdiff, Baylimit, size_confilct = input
         self.Contaienrs_in_buffer = Contaienrs_in_buffer
         self.Sumdiff = Sumdiff
@@ -75,7 +75,9 @@ class Instance_buffer(object):
                     slot_positions_array = slot_positions_array[:, 1:].astype(int)
                     # 随机选取一部分可用位置(减少决策变量数目, 防止超过学生版的gurobi规模)
                     slot_num = slot_positions_array.shape[0]
-                    slot_left_num = np.random.randint(15, 24) # todo 确定合适的数量以保证总数始终不超过决策变量上限
+                    slot_left_num = int(slot_num * ratio)
+                    if slot_left_num == 0:
+                        continue
                     random_indices = np.random.choice(slot_num, size = min(slot_left_num, slot_num), replace = False)
                     random_indices.sort()
                     slot_positions_array = slot_positions_array[random_indices, :]
@@ -94,7 +96,7 @@ class Instance_buffer(object):
             self.Contaienrs_available_slot_bay[container_id] = self.Conattr_available_slot_bay[vessel][size] #
         # print(self.Contaienrs_available_slot)
         # print(self.Conattr_available_slot_bay)
-        logging.info(f"Input cache for instance done")
+        logging.info(f"Input cache for instance with ratio {ratio} done")
 
 
 
@@ -175,8 +177,8 @@ class Instance_buffer(object):
 
 
 class MIP_solver(object):
-    def __init__(self, Instance):
-        self.weight = [0.5, 0.5]
+    def __init__(self, Instance, weight):
+        self.weight = weight
         self.model = Model("MIP")
         self.instacne = Instance
 
@@ -405,7 +407,7 @@ class MIP_solver(object):
         return Expr_allves
 
     def set_Obiective(self):
-        obj = self.weight[0] * self.cal_Objective_diff() + self.weight[1] * self.cal_Objective_Equilibrium()
+        obj = self.weight["final_weights_diff"] * self.cal_Objective_diff() + self.weight["final_block_Equilibrium"] * self.cal_Objective_Equilibrium()
         self.model.setObjective(obj, GRB.MINIMIZE)
         logging.info(f"Cal Objective done")
 
@@ -417,7 +419,7 @@ class MIP_solver(object):
             for block, position_dict in position_dict_dict.items():
                 for position in position_dict:
                     if self.Xiabr[container_id][block][position].x:
-                        Solution[container_id] = (block, position[0], position[1])
+                        Solution[container_id] = (block, position[0], position[1], position[2])
         logging.info(f"parse Solution of Model done")
         return Solution
 
@@ -456,7 +458,58 @@ class MIP_solver(object):
         return Solution
 
 
-# if __name__ == "__main__":
-#     Instance = Instance_buffer()
-#     MIP = MIP_solver(Instance)
-#     MIP.build_Model()
+def gen_solution_MIP(input, weight, ratio: float, decay_rate: float):
+    """
+    调用gurobi构建MIP模型, 进行箱位规划
+    Parameters
+    ----------
+    input: DB.init_instance_for_baseline 返回的缓存tuple
+    weight: 多目标的权重
+    ratio: 可选相位的选择比例
+    decay_rate: ratio的折扣系数
+
+    Returns
+    -------
+    solution: dict of slot_tuple { conid: ( block, bay, stack, tier) }
+    """
+    try:
+        instance_buffer = Instance_buffer(input, ratio=ratio)
+        solver = MIP_solver(instance_buffer, weight)
+        solution = solver.build_Model()
+        return solution
+    except:
+        Ratio = ratio * decay_rate
+        solution = gen_solution_MIP(input, weight, ratio=Ratio, decay_rate=decay_rate)
+        return solution
+
+if __name__ == "__main__":
+    # 测试例程
+    from simulation.DataBase.core import *
+    config_path = "config/demo.ini"
+    db = DB(config_path)
+    # db.Initall()
+    db.reset(reset="dump")
+    start = time.time()
+
+    # ====== 测试baseline   减小MIP规模措施：减小num, ratio、decay_rate
+    container_list = db.next_ten_container(num = 10)
+    while container_list:
+        # ====== 规划箱位
+        input = db.init_instance_for_baseline()
+        solution = gen_solution_MIP(input,
+                                    weight = {"final_block_Equilibrium":0.5,"final_weights_diff":0.5},
+                                    ratio = 0.3,
+                                    decay_rate = 0.8)
+        # ====== 放置集装箱
+        for curcon in container_list:
+            db.updata_and_slot(curcon=curcon, slot=solution[curcon.ctn_no], plan=False)
+        # ====== 计算指标
+        yard_features_cache = db.cal_yard_features_cache(vessel = None) # 缓存计算 dict of list
+        # ====== 获取buffer
+        container_list = db.next_ten_container(num = 10)
+    logging.info(f"{time.time() - start}")
+
+    db.close()
+
+
+
