@@ -564,7 +564,7 @@ class DB(DB0):
         self.candidate_slots = pickle.load(open(self.candidate_slots_path, "rb"))
         logging.info(f"Load Slot_cache.pkl done")
 
-    def init_instance_for_baseline(self):
+    def init_instance_for_baseline(self, num=10):
         """
         用于baseline的agent初始化信息
         """
@@ -572,7 +572,7 @@ class DB(DB0):
         vessel_in_buffer = list(self.block.keys())  # test vessel 只有一个
 
         # ===== Contaienrs_in_buffer  buffer中集装箱的属性 {container_id: [ vessel(~str) , weight(~int), size(~int)]}
-        next_ten_container = self.next_ten_container()
+        next_ten_container = self.next_ten_container(num)
         Contaienrs_in_buffer = {con.ctn_no: [con.vessel, con.weight, int(con.size)] for con in next_ten_container}
         # print(Contaienrs_in_buffer)
 

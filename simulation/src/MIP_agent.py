@@ -8,10 +8,9 @@ import logging
 import numpy as np
 from gurobipy import *
 import pandas as pd
-# from ortools.linear_solver import pywraplp
-# from ortools.init import pywrapinit
-
-
+from ortools.linear_solver import pywraplp
+from ortools.init import pywrapinit
+import logging
 
 class Instance_buffer(object):
     def __init__(self, input, ratio = 1):
@@ -96,7 +95,7 @@ class Instance_buffer(object):
             self.Contaienrs_available_slot_bay[container_id] = self.Conattr_available_slot_bay[vessel][size] #
         # print(self.Contaienrs_available_slot)
         # print(self.Conattr_available_slot_bay)
-        logging.info(f"Input cache for instance with ratio {ratio} done")
+        logging.info(f"Input cache for instance_{len(Contaienrs_in_buffer)} containers with ratio {ratio} done")
 
 
 
@@ -253,7 +252,7 @@ class MIP_solver(object):
         logging.info(f"Init {i} Variables Kab Jab done")
 
 
-    ## ========== Constraintsss
+    ## ========== Constraint
     def set_Constraint_X_i(self):
         i = 0
         for container_id, position_dict_dict in self.Xiabr.items(): #  i: {a: {(b,r): Xiabr } }
@@ -425,7 +424,7 @@ class MIP_solver(object):
 
     ## ========== Model
     def build_Model(self):
-        logging.info(f"--------------------- Start build MIP Model ---------------------")
+        logging.info(f"--------------------- Start build MIP Model by gurobi---------------------")
         self.init_Variables_Xiabr()
         self.init_Variables_Yva_Zva()
         self.init_Variables_Kab_Jab()
@@ -458,15 +457,292 @@ class MIP_solver(object):
         return Solution
 
 
-def gen_solution_MIP(input, weight, ratio: float, decay_rate: float):
+class MIP_solver_ortools(object):
+    def __init__(self, Instance, weight):
+        self.weight = weight
+        self.model = pywraplp.Solver.CreateSolver("SCIP")
+        # self.model = pywraplp.Solver.CreateSolver("GLOP")
+        self.instacne = Instance
+
+        # ========== Model parameters
+        self.Xiabr = {}  # 决策变量 i: {a: {(b,r): Xiabr } } 集装箱i是否放在了位置（a,b,r）
+        self.Con_X_i = {} # 每个集装箱只能且必须放在一个位置
+        self.Con_X_abr = {} # 每个位置最多放置一个集装箱
+
+        self.Yva = {}  # 决策变量 v: {a: Yva } 每个block放入的vessel航线集装箱数目
+        self.Zva = {}  # 辅助决策变量 v: {a: Zva } |  Yva - mean  |
+        self.Con_X_Y = {}
+        self.Con_Y_Z = {}
+
+        self.Kab = {}  # 决策变量 a: {b : Kab } 每个bay中放入的buffer中的集装箱数目（不区分航线）ub = 贝内总数限制
+        self.Jab = {}  # 决策变量 a: {b : Jab } 每个bay是否被buffer中的集装箱使用（不区分航线）
+        self.Con_X_K = {}
+        self.Con_K_J = {}
+        self.Con_J_conflict = {} # 相互冲突的bay不能同时启用
+
+
+    ## ========== Variables
+    def init_Variables_Xiabr(self):
+        i = 0
+        for container_id, position_dict in self.instacne.Contaienrs_available_slot.items():
+            self.Xiabr[container_id] = {}
+            for block, position_list in position_dict.items():
+                self.Xiabr[container_id][block] = {}
+                for position in position_list:
+                    position = tuple(position)
+                    name = "X%s_%s_%s"%(container_id, block, position)
+                    self.Xiabr[container_id][block][position] = self.model.BoolVar(name)
+                    i += 1
+        logging.info(f"Init {i} Variables Xiabr done")
+
+    def init_Variables_Yva_Zva(self):
+        i = 0
+        for vessel, block_connum_dict in self.instacne.Contaienrs_num_in_block.items():
+            self.Yva[vessel] = {}
+            self.Zva[vessel] = {}
+            for block, connum in block_connum_dict.items():
+                Yname = "Y%s_%s"%(vessel, block)
+                Ylb = connum
+                Yub = Ylb + len(self.instacne.Vessel_container[vessel])
+                self.Yva[vessel][block] = self.model.IntVar(Ylb, Yub, Yname)
+                #
+                Zname = "Y%s_%s"%(vessel, block)
+                Zlb = 0
+                Zub = Yub - self.instacne.Contaienrs_meannum_afterslot[vessel][0]
+                self.Zva[vessel][block] = self.model.NumVar(Zlb, Zub, Zname)
+                i += 1
+        logging.info(f"Init {i} Variables Yva Zva done")
+
+    def init_Variables_Kab_Jab(self):
+        i = 0
+        for block, block_data in self.instacne.Slot_available_contaienrs_bay.items():
+            self.Kab[block] = {}
+            self.Jab[block] = {}
+            for bay in block_data:
+                Kname = "K{}_{}".format(block, bay)
+                Klb = 0
+                Kub = self.instacne.Baylimit[block][bay]
+                self.Kab[block][bay] = self.model.IntVar(Klb, Kub, Kname)
+                #
+                Jname = "J{}_{}".format(block, bay)
+                self.Jab[block][bay] = self.model.BoolVar(Jname)
+                i += 1
+        logging.info(f"Init {i} Variables Kab Jab done")
+
+
+    ## ========== Constraints
+    def set_Constraint_X_i(self):
+        i = 0
+        for container_id, position_dict_dict in self.Xiabr.items(): #  i: {a: {(b,r): Xiabr } }
+            name = "ConX_i{}".format(container_id)
+            Expr = []
+            for block, position_dict in position_dict_dict.items():
+                for position in position_dict:
+                    Expr.append(self.Xiabr[container_id][block][position])
+            Expr = self.model.Sum(Expr)
+            self.Con_X_i[container_id] = self.model.Add(Expr == 1, name=name)
+            i += 1
+        logging.info(f"Set {i} Constraint X_i done")
+
+    def set_Constraint_X_abr(self):
+        i = 0
+        for block, position_container_list in self.instacne.Slot_available_contaienrs.items():
+            self.Con_X_abr[block] = {}
+            for position, container_list in position_container_list.items():
+                name = "ConX_abr{}".format(position)
+                Expr = []
+                for container_id in container_list:
+                    Expr.append(self.Xiabr[container_id][block][position])
+                Expr = self.model.Sum(Expr)
+                self.Con_X_abr[block][position] = self.model.Add(Expr <= 1, name=name)
+                i += 1
+        logging.info(f"Set {i} Constraint X_abr done")
+
+    def set_Constraint_X_Y(self):
+        i = 0
+        for vessel, block_connum_dict in self.instacne.Contaienrs_num_in_block.items():
+            self.Con_X_Y[vessel] = {}
+            for block, connum in block_connum_dict.items():
+                name = "ConX_Y_{}_{}".format(vessel, block)
+                Expr = []
+                Expr.append(self.Yva[vessel][block])
+                Expr.append(-1 * connum)
+                for container_id in self.instacne.Vessel_container[vessel]:
+                    if block in self.Xiabr[container_id]:
+                        for position in self.Xiabr[container_id][block]:
+                            Expr.append(self.Xiabr[container_id][block][position] * -1)
+                Expr = self.model.Sum(Expr)
+                self.Con_X_Y[vessel][block] = self.model.Add(Expr == 0, name=name)
+                i += 1
+        logging.info(f"Set {i} Constraint X_Y done")
+
+    def set_Constraint_Y_Z(self):
+        i = 0
+        for vessel, block_connum_dict in self.Yva.items():
+            self.Con_Y_Z[vessel] = {}
+            for block, connum in block_connum_dict.items():
+                self.Con_Y_Z[vessel][block] = {}
+                name = "ConY_Z_{}_{}".format(vessel, block)
+                #
+                Expr1 = []
+                Expr1.append(self.Zva[vessel][block])
+                Expr1.append(self.Yva[vessel][block])
+                Expr1.append(self.instacne.Contaienrs_meannum_afterslot[vessel][0])
+                Expr1 = self.model.Sum(Expr1)
+                self.Con_Y_Z[vessel][block][1] = self.model.Add(Expr1 >= 0, name=name + "1")
+                #
+                Expr2 = []
+                Expr2.append(self.Yva[vessel][block])
+                Expr2.append(self.Zva[vessel][block])
+                Expr2.append(self.instacne.Contaienrs_meannum_afterslot[vessel][0] * -1)
+                Expr2 = self.model.Sum(Expr2)
+                self.Con_Y_Z[vessel][block][2] = self.model.Add(Expr2 >= 0, name=name + "2")
+                i += 1
+        logging.info(f"Set {2 * i} ConstraintY_Z done")
+
+    def set_Constraint_X_K(self):
+        i = 0
+        for block, block_data in self.instacne.Slot_available_contaienrs_bay.items():
+            self.Con_X_K[block] = {}
+            for bay, bay_data in block_data.items():
+                name = "ConX_K_{}_{}".format(block, bay)
+                Expr = []
+                Expr.append(self.Jab[block][bay] * 1)
+                for position, container_id_list in bay_data.items():
+                    for container_id in container_id_list:
+                        Expr.append(self.Xiabr[container_id][block][position] * -1)
+                Expr = self.model.Sum(Expr)
+                self.Con_X_K[block][bay] = self.model.Add(Expr == 0, name=name)
+                i += 1
+        logging.info(f"Set {i} Constraint X_K done")
+
+    def set_Constraint_K_J(self):
+        i = 0
+        for block, block_data in self.Jab.items():
+            self.Con_K_J[block] = {}
+            for bay in block_data:
+                self.Con_K_J[block][bay] = {}
+                name = "ConK_J_{}_{}".format(block, bay)
+                #
+                Expr1 = []
+                Expr1.append(self.Jab[block][bay] * self.instacne.Baylimit[block][bay])
+                Expr1.append(self.Kab[block][bay] * -1)
+                Expr1 = self.model.Sum(Expr1)
+                self.Con_K_J[block][bay][1] = self.model.Add(Expr1 >= 0, name=name + "1")
+                #
+                Expr2 = []
+                Expr2.append(self.Jab[block][bay] * -1)
+                Expr2.append(self.Kab[block][bay] * 1)
+                Expr2 = self.model.Sum(Expr2)
+                self.Con_K_J[block][bay][1] = self.model.Add(Expr2 >= 0, name=name + "2")
+                i += 1
+        logging.info(f"Set Constraint {2*i} K_J done")
+
+    def set_Constraint_J_conflict(self):
+        i = 0
+        for block, confilct_bays_list in self.instacne.size_confilct.items():
+            if block in self.Jab:
+                self.Con_J_conflict[block] = {}
+                for confilct_bays in confilct_bays_list:
+                    name = "J_conflict_{}_{}".format(block, confilct_bays)
+                    Expr = []
+                    for bay in confilct_bays:
+                        if bay in self.Jab[block]:
+                            Expr.append(self.Jab[block][bay] * 1)
+                    Expr = self.model.Sum(Expr)
+                    self.Con_J_conflict[block][tuple(confilct_bays)] = self.model.Add(Expr <= 1, name=name)
+                    i += 1
+        logging.info(f"Set Constraint {i} J_conflict done")
+
+    ## ========== Objective
+    def cal_Objective_diff(self):
+        Expr_allves = []
+        for vessel in self.instacne.Vessel_container:
+            Expr = []
+            Expr.append(self.instacne.Sumdiff[vessel])
+            for container_id in self.instacne.Vessel_container[vessel]:
+                for block, position_dict in self.Xiabr[container_id].items():
+                    for position in position_dict:
+                        Diabr = self.instacne.Add_diff_container_stack[container_id][block][position]
+                        Expr.append(self.Xiabr[container_id][block][position] * Diabr)
+            Expr = self.model.Sum(Expr)
+            Expr = Expr / self.instacne.Contaienrs_meannum_afterslot[vessel][1]  #
+            Expr_allves.append(Expr)
+        Expr_allves = self.model.Sum(Expr_allves)
+        Expr_allves = Expr_allves / len(self.instacne.Vessel_container)
+        logging.info(f"Cal Objective_diff done")
+        return Expr_allves
+
+    def cal_Objective_Equilibrium(self):
+        Expr_allves = []
+        for vessel in self.instacne.Vessel_container:
+            Expr = []
+            for block in self.Zva[vessel]:
+                Expr.append(self.Zva[vessel][block] * 1)
+            Expr = self.model.Sum(Expr)
+            Expr = Expr / self.instacne.Contaienrs_meannum_afterslot[vessel][1]  #
+            Expr_allves.append(Expr)
+        Expr_allves = self.model.Sum(Expr_allves)
+        Expr_allves = Expr_allves / len(self.instacne.Vessel_container)
+        logging.info(f"Cal Objective_Equilibrium done")
+        return Expr_allves
+
+    def set_Obiective(self):
+        obj = self.weight["final_weights_diff"] * self.cal_Objective_diff() + self.weight["final_block_Equilibrium"] * self.cal_Objective_Equilibrium()
+        self.model.Minimize(obj)
+        logging.info(f"Cal Objective done")
+
+    ## ========== Solution
+    def parse_Solution(self):
+        logging.info(f"ObjVal of MIP Model = {self.model.Objective().Value()}")
+        Solution = {}
+        for container_id, position_dict_dict in self.Xiabr.items():
+            for block, position_dict in position_dict_dict.items():
+                for position in position_dict:
+                    if self.Xiabr[container_id][block][position].solution_value():
+                        Solution[container_id] = (block, position[0], position[1], position[2])
+        logging.info(f"parse Solution of Model done")
+        return Solution
+
+    ## ========== Model
+    def build_Model(self):
+        logging.info(f"--------------------- Start build MIP Model by ortools---------------------")
+        self.init_Variables_Xiabr()
+        self.init_Variables_Yva_Zva()
+        self.init_Variables_Kab_Jab()
+        logging.info(f"NumVariables = {self.model.NumVariables()}")
+        #
+        self.set_Constraint_X_i()
+        self.set_Constraint_X_abr()
+        self.set_Constraint_X_Y()
+        self.set_Constraint_Y_Z()
+        self.set_Constraint_X_K()
+        self.set_Constraint_K_J()
+        self.set_Constraint_J_conflict()
+        logging.info(f"NumConstraints = {self.model.NumConstraints()}")
+        #
+        self.set_Obiective()
+        #
+        status = self.model.Solve()
+        if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+            Solution = self.parse_Solution()
+        else:
+            logging.warning(f"--------------------- MIP Model INFEASIBLE ---------------------")
+            Solution = None
+        logging.info(f"Solution = {Solution}")
+        return Solution
+
+
+def gen_solution_MIP(input, weight, ratio: float, decay_rate: float, Solver = "gurobi"):
     """
     调用gurobi构建MIP模型, 进行箱位规划
     Parameters
     ----------
     input: DB.init_instance_for_baseline 返回的缓存tuple
     weight: 多目标的权重
-    ratio: 可选相位的选择比例
+    ratio: 可选箱位的选择比例
     decay_rate: ratio的折扣系数
+    Solver: 求解器类型 gurobi和ortools的规模上限不同
 
     Returns
     -------
@@ -474,13 +750,18 @@ def gen_solution_MIP(input, weight, ratio: float, decay_rate: float):
     """
     try:
         instance_buffer = Instance_buffer(input, ratio=ratio)
-        solver = MIP_solver(instance_buffer, weight)
+        if Solver == "gurobi":
+            solver = MIP_solver(instance_buffer, weight)
+        elif Solver == "ortools":
+            solver = MIP_solver_ortools(instance_buffer, weight)
         solution = solver.build_Model()
         return solution
-    except:
+    except Exception as ex:
+        logging.warning(f"Failed to build MIP Model: {ex}")
         Ratio = ratio * decay_rate
-        solution = gen_solution_MIP(input, weight, ratio=Ratio, decay_rate=decay_rate)
+        solution = gen_solution_MIP(input, weight, ratio=Ratio, decay_rate=decay_rate, Solver = Solver)
         return solution
+
 
 if __name__ == "__main__":
     # 测试例程
@@ -491,25 +772,26 @@ if __name__ == "__main__":
     db.reset(reset="dump")
     start = time.time()
 
-    # ====== 测试baseline   减小MIP规模措施：减小num, ratio、decay_rate
-    container_list = db.next_ten_container(num = 10)
+    # ====== 测试baseline 减小MIP规模措施：减小buffer_size、ratio、decay_rate
+    buffer_size = 10
+    container_list = db.next_ten_container(num = buffer_size)
     while container_list:
         # ====== 规划箱位
-        input = db.init_instance_for_baseline()
+        input = db.init_instance_for_baseline(num = buffer_size)
         solution = gen_solution_MIP(input,
-                                    weight = {"final_block_Equilibrium":0.5,"final_weights_diff":0.5},
-                                    ratio = 0.3,
-                                    decay_rate = 0.8)
+                                    weight = {"final_block_Equilibrium":0.5, "final_weights_diff":0.5},
+                                    ratio = 1,
+                                    decay_rate = 0.9,
+                                    Solver = "gurobi")
         # ====== 放置集装箱
         for curcon in container_list:
             db.updata_and_slot(curcon=curcon, slot=solution[curcon.ctn_no], plan=False)
         # ====== 计算指标
         yard_features_cache = db.cal_yard_features_cache(vessel = None) # 缓存计算 dict of list
         # ====== 获取buffer
-        container_list = db.next_ten_container(num = 10)
+        container_list = db.next_ten_container(num = buffer_size)
     logging.info(f"{time.time() - start}")
 
     db.close()
-
 
 
