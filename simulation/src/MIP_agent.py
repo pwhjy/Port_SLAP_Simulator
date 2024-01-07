@@ -329,7 +329,7 @@ class MIP_solver(object):
             for bay, bay_data in block_data.items():
                 name = "ConX_K_{}_{}".format(block, bay)
                 Expr = LinExpr(0)
-                Expr.addTerms(1, self.Jab[block][bay])
+                Expr.addTerms(1, self.Kab[block][bay])
                 for position, container_id_list in bay_data.items():
                     for container_id in container_id_list:
                         Expr.addTerms(-1, self.Xiabr[container_id][block][position])
@@ -607,7 +607,7 @@ class MIP_solver_ortools(object):
             for bay, bay_data in block_data.items():
                 name = "ConX_K_{}_{}".format(block, bay)
                 Expr = []
-                Expr.append(self.Jab[block][bay] * 1)
+                Expr.append(self.Kab[block][bay] * 1)
                 for position, container_id_list in bay_data.items():
                     for container_id in container_id_list:
                         Expr.append(self.Xiabr[container_id][block][position] * -1)
