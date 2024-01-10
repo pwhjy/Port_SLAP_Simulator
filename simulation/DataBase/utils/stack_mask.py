@@ -4,7 +4,7 @@
 from simulation.DataBase.table_define import *
 import numpy as np
 import logging
-
+import networkx as nx
 
 def get_blockmask(session, block, size):
     """
@@ -23,7 +23,7 @@ def get_blockmask(session, block, size):
     slots_mask_size = session.query(Yard_bay.exist
                                          * (Yard_bay.limit - Yard_bay.sum_ctn)
                                          * (Yard_stack.maxtier - Yard_stack.tier)
-                                         * ((1 + size + Yard_bay.bay) % 2)) \
+                                         * ((1 + int(size) + Yard_bay.bay) % 2)) \
         .filter(stackfilter) \
         .order_by(Yard_stack.bay, Yard_stack.stack).all()
     # blockmask = list(np.sign([f[0] for f in slots_mask_size]))
@@ -50,7 +50,7 @@ def get_baymask(session, blockbay, size):
     slots_mask_size = session.query(Yard_bay.exist
                                          * (Yard_bay.limit - Yard_bay.sum_ctn)
                                          * (Yard_stack.maxtier - Yard_stack.tier)
-                                         * ((1 + size + Yard_bay.bay) % 2)) \
+                                         * ((1 + int(size) + Yard_bay.bay) % 2)) \
         .filter(stackfilter) \
         .order_by(Yard_stack.stack).all()
     # baymask = list(np.sign([f[0] for f in slots_mask_size]))
@@ -91,7 +91,7 @@ def init_candidate_slots(session, allblocks):
     获取完整的初始信息用于 候选箱位与mask更新
     Returns
     -------
-    candidate_slots
+    candidate ccccccccccfhff 6[-p0=['p][=][[-[=[]=[-[=[=[=[_slots
     """
     candidate_slots = {}
     for block in allblocks:
