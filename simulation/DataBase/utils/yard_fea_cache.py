@@ -205,20 +205,11 @@ class Yard_cache(object):
             vessel = self.vesselid[curcon.vessel]
             ub = num_vessel / int(target_block[0])
             connum_curblock = self.blocks_vesssel[self.blockid[slot[0]], vessel]
-<<<<<<< HEAD
-            block_Equilibrium = max(0, connum_curblock - ub) # 超出上限的集装箱数
-            # block_Equilibrium = 0 if block_Equilibrium <= 1 else block_Equilibrium
-            block_Equilibrium = -1 * np.log(1 + block_Equilibrium) #-1 * log(1 + 超出上限的集装箱数)
-            # block_Equilibrium = -1 * (block_Equilibrium * block_Equilibrium) # -1 * (超出上限的集装箱数的平方)
-            block_overflow = -1 * max(0, (np.sum(np.array(list(self.blocks_vesssel[1:, vessel]>0))!=0) - int(target_block[1])))\
-                if connum_curblock == 1 else 0 # 落位箱区总数超过合适的箱区数量上限
-=======
             block_Equilibrium = max(0, connum_curblock - ub)  # 超出上限的集装箱数
             block_Equilibrium = -1 * np.log(1 + block_Equilibrium)  # -1 * log(1 + 超出上限的集装箱数)
             block_overflow = -1 * max(0, (
                         np.sum(np.array(list(self.blocks_vesssel[1:, vessel] > 0)) != 0) - int(target_block[1]))) \
                 if connum_curblock == 1 else 0  # 落位箱区总数超过合适的箱区数量上限
->>>>>>> a8e2f2f78fb56a006c6036bc6fb5272b73bccd51
 
             berth_block = -1 * self.Yard_block_distance.loc[slot[0], curcon.berth]  # -1 * distance
             berth_block = 0.5 if berth_block == 0 else berth_block
