@@ -1278,6 +1278,135 @@ class DB(DB0):
         logging.info(f"Randomly choose slot {bestslot} for Container {current_container.ctn_no}")
         return bestslot
 
+    def get_one_candidate_slot_Hierarchical(self, current_container, block=None, candidate_num = 10, rule = 1):
+        """
+        分层按规则选位
+        rule = 0 则选择不同航线的列
+        Returns
+        -------
+        (block, bay, stack, tier)  一个可用箱位tuple
+        """
+        def balance_block(Block):
+            Block0 = {b:0 for b in Block}
+            # Block范围内每个箱区的集装箱数量
+            block_num = self.session.query(Containers.block, sa.func.count(Containers.block)).filter(Containers.block.in_(Block),
+                                                                                   Containers.vessel == current_container.vessel,
+                                                                                   Containers.schedule_frame>0)\
+                                                                           .group_by(Containers.block).all()
+            addblock = {b[0]:b[1] for b in block_num}
+            newblock = {b: n + addblock.get(b, 0) for b,n in Block0.items()}
+            min_key = min(newblock, key= newblock.get)
+            print(min_key, newblock)
+            return [min_key]
+
+        def get_cslots(block, num):
+            # 可用筛选条件
+            stack_filter = sa.and_(Yard_stack.tier < Yard_stack.maxtier,  # 容量限制-层高
+                                   )
+            bay_filter = sa.and_(Yard_bay.block == Yard_stack.block,
+                                 Yard_bay.bay == Yard_stack.bay,
+                                 Yard_bay.block.in_(block) ,  # 指定箱区范围
+                                 Yard_bay.exist == 1,  # 有真实空位
+                                 Yard_bay.sum_ctn < Yard_bay.limit,  # 容量限制-预留翻箱空位
+                                 (Yard_bay.bay + current_container.size) % 2 < 1  # 尺寸限制
+                                 )
+
+            # 属性匹配筛选条件(非空)
+            slot_filter = sa.and_(Yard_slot.block == Yard_stack.block,
+                                  Yard_slot.bay == Yard_stack.bay,  # 非空贝
+                                  Yard_slot.stack == Yard_stack.stack,  # 非空列
+                                  Yard_slot.tier == Yard_stack.tier   # 与lowercon属性对比（rule != 1筛选条件为列内有）
+                                  )
+            containers_filter1 = sa.and_(Containers.ctn_no == Yard_slot.ctn_no,
+                                         Containers.vessel == current_container.vessel,  # 下层同船舶/（列内有同船舶）
+                                         Containers.weight <= current_container.weight, # 下层更轻/（列内有更轻）#同vessel时weight才有比较意义
+                                         )
+            containers_filter2 = sa.and_(Containers.ctn_no == Yard_slot.ctn_no,
+                                         Containers.vessel == current_container.vessel if rule == 1
+                                         else Containers.vessel != current_container.vessel,  # 下层同船舶/（列内有同船舶）
+                                         )
+
+            candidate_stacks = []
+            # 优先级1——可用&非空&下层集装箱属性适配 filter1
+            pre11_candidate_stacks = self.session.query(Yard_stack.block,Yard_stack.bay,Yard_stack.stack,Yard_stack.tier) \
+                .filter(stack_filter) \
+                .join(Yard_bay, bay_filter) \
+                .join(Yard_slot, slot_filter) \
+                .join(Containers, containers_filter1) \
+                .order_by(Yard_stack.block, Yard_stack.bay) \
+                .limit(num).all()
+            if len(pre11_candidate_stacks) > 0:
+                candidate_stacks.extend(pre11_candidate_stacks)
+                logging.info(f"Select {len(pre11_candidate_stacks)} pre11_candidate_stacks "
+                             f"for {current_container.ctn_no}")
+
+            if len(candidate_stacks) < num:
+                # 优先级2——可用&空列
+                pre2_candidate_stacks = self.session.query(Yard_stack.block,Yard_stack.bay,Yard_stack.stack,Yard_stack.tier) \
+                    .filter(stack_filter, Yard_stack.tier == 0) \
+                    .join(Yard_bay, bay_filter) \
+                    .order_by(Yard_stack.block, Yard_stack.bay) \
+                    .limit(num-len(candidate_stacks)).all()
+                if pre2_candidate_stacks != []:
+                    candidate_stacks.extend(pre2_candidate_stacks)
+                    logging.info(f"Select {len(pre2_candidate_stacks)} pre2_candidate_stacks"
+                                 f" for {current_container.ctn_no}")
+
+            if len(candidate_stacks) < num:
+                # 优先级12——可用&非空&下层集装箱属性适配 filter2
+                pre12_candidate_stacks = self.session.query(Yard_stack.block,Yard_stack.bay,Yard_stack.stack,Yard_stack.tier) \
+                    .filter(stack_filter) \
+                    .join(Yard_bay, bay_filter) \
+                    .join(Yard_slot, slot_filter) \
+                    .join(Containers, containers_filter2) \
+                    .order_by(Yard_stack.block, Yard_stack.bay) \
+                    .limit(num-len(candidate_stacks)).all()
+                if pre12_candidate_stacks != []:
+                    candidate_stacks.extend(pre12_candidate_stacks)
+                    logging.info(f"Select {len(pre12_candidate_stacks)} pre12_candidate_stacks"
+                                 f" for {current_container.ctn_no} ")
+
+            if len(candidate_stacks) < num:
+                # 优先级3——可用（未考虑有无指令）&非空
+                pre3_candidate_stacks = self.session.query(Yard_stack.block,Yard_stack.bay,Yard_stack.stack,Yard_stack.tier) \
+                    .filter(stack_filter) \
+                    .join(Yard_bay, bay_filter) \
+                    .join(Yard_slot, slot_filter) \
+                    .order_by(Yard_stack.block, Yard_stack.bay) \
+                    .limit(num-len(candidate_stacks)).all()
+                if pre3_candidate_stacks != []:
+                    candidate_stacks.extend(pre3_candidate_stacks)
+                    logging.info(f"Select {len(pre3_candidate_stacks)} pre3_candidate_stacks"
+                                 f" for {current_container.ctn_no}")
+
+            return candidate_stacks
+
+        if current_container == 0:
+            logging.info("No current_container")
+            return None
+
+        if block == None:
+            if current_container.vessel in self.block:
+                Block = self.block[current_container.vessel]
+            else:
+                Block = self.allblocks
+        else:
+            Block = block
+        seBlock = balance_block(Block)
+        logging.info(f"pre-set candidate_blocks for {current_container.ctn_no} = {seBlock}")
+
+        candidate_stacks = get_cslots(seBlock, candidate_num)
+
+        if len(candidate_stacks) >0:
+            bestSlot = random.choice(candidate_stacks)
+            bestslot = (bestSlot[0], bestSlot[1], bestSlot[2], bestSlot[3])
+        else:
+            bestslot = self.get_one_candidate_slot_Hierarchical(current_container, block = list(set(Block)-set(seBlock)))
+        # slot实际是筛选出的stack内最上层位置
+        logging.info(f"Randomly choose slot {bestslot} for Container {current_container.ctn_no}")
+        return bestslot
+
+
 
 
     def cal_slot_features_cache_allblock(self, curcon, block = None):
