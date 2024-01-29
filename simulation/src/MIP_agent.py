@@ -4,9 +4,10 @@
 import os
 import time
 import logging
-
 import numpy as np
 from gurobipy import *
+import cplex
+from cplex.exceptions import CplexError
 import pandas as pd
 from ortools.linear_solver import pywraplp
 from ortools.init import pywrapinit
@@ -733,6 +734,383 @@ class MIP_solver_ortools(object):
         return Solution
 
 
+class MIP_solver_cplex(object):
+    def __init__(self, Instance, weight):
+        self.weight = weight
+        self.model = cplex.Cplex()
+        print(self.model.get_license())
+        self.instacne = Instance
+
+        # ========== Model parameters
+        self.Xiabr = {}  # 决策变量 i: {a: {(b,r): Xiabr } } 集装箱i是否放在了位置（a,b,r）
+        self.Con_X_i = {} # 每个集装箱只能且必须放在一个位置
+        self.Con_X_abr = {} # 每个位置最多放置一个集装箱
+
+        self.Yva = {}  # 决策变量 v: {a: Yva } 每个block放入的vessel航线集装箱数目
+        self.Zva = {}  # 辅助决策变量 v: {a: Zva } |  Yva - mean  |
+        self.Con_X_Y = {}
+        self.Con_Y_Z = {}
+
+        self.Kab = {}  # 决策变量 a: {b : Kab } 每个bay中放入的buffer中的集装箱数目（不区分航线）ub = 贝内总数限制
+        self.Jab = {}  # 决策变量 a: {b : Jab } 每个bay是否被buffer中的集装箱使用（不区分航线）
+        self.Con_X_K = {}
+        self.Con_K_J = {}
+        self.Con_J_conflict = {} # 相互冲突的bay不能同时启用
+
+
+    ## ========== Variables
+    def init_Variables_Xiabr(self):
+        try:
+            i = 0
+            for container_id, position_dict in self.instacne.Contaienrs_available_slot.items():
+                self.Xiabr[container_id] = {}
+                for block, position_list in position_dict.items():
+                    self.Xiabr[container_id][block] = {}
+                    for position in position_list:
+                        position = tuple(position)
+                        name = "X%s_%s_%s" % (container_id, block, position)
+                        vtype = self.model.variables.type.binary
+                        self.model.variables.add(types=[vtype], names=[name])
+                        self.Xiabr[container_id][block][position] = name
+                        # self.Xiabr[container_id][block][position] = self.model.variables.add(types=[vtype], names=[name])
+                        i += 1
+            logging.info(f"Init {i} Variables Xiabr done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    def init_Variables_Yva_Zva(self):
+        try:
+            i = 0
+            for vessel, block_connum_dict in self.instacne.Contaienrs_num_in_block.items():
+                self.Yva[vessel] = {}
+                self.Zva[vessel] = {}
+                for block, connum in block_connum_dict.items():
+                    Yname = "Y%s_%s" % (vessel, block)
+                    Yvtype = self.model.variables.type.integer
+                    Ylb = connum
+                    Yub = Ylb + len(self.instacne.Vessel_container[vessel])
+                    # self.Yva[vessel][block] = self.model.variables.add(lb=[Ylb], ub=[Yub], types=[Yvtype], names=[Yname])
+                    self.model.variables.add(lb=[Ylb], ub=[Yub], types=[Yvtype], names=[Yname])
+                    self.Yva[vessel][block] = Yname
+                    #
+                    Zname = "Z%s_%s" % (vessel, block)
+                    Zvtype = self.model.variables.type.continuous
+                    Zlb = 0
+                    Zub = Yub - self.instacne.Contaienrs_meannum_afterslot[vessel][0]
+                    # self.Zva[vessel][block] = self.model.variables.add(lb=[Zlb], ub=[Zub], types=[Zvtype], names=[Zname])
+                    self.model.variables.add(lb=[Zlb], ub=[Zub], types=[Zvtype], names=[Zname])
+                    self.Zva[vessel][block] = Zname
+                    i += 1
+            logging.info(f"Init {i} Variables Yva Zva done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    def init_Variables_Kab_Jab(self):
+        try:
+            i = 0
+            for block, block_data in self.instacne.Slot_available_contaienrs_bay.items():
+                self.Kab[block] = {}
+                self.Jab[block] = {}
+                for bay in block_data:
+                    Kname = "K{}_{}".format(block, bay)
+                    Ktype = self.model.variables.type.integer
+                    Klb = 0
+                    Kub = self.instacne.Baylimit[block][bay]
+                    # self.Kab[block][bay] = self.model.variables.add(lb=[Klb], ub=[Kub], types=[Ktype], names=[Kname])
+                    self.Kab[block][bay] = Kname
+                    self.model.variables.add(lb=[Klb], ub=[Kub], types=[Ktype], names=[Kname])
+                    #
+                    Jname = "J{}_{}".format(block, bay)
+                    Jtype = self.model.variables.type.binary
+                    # self.Jab[block][bay] = self.model.variables.add(types=[Jtype], names=[Jname])
+                    self.Jab[block][bay] = Jname
+                    self.model.variables.add(types=[Jtype], names=[Jname])
+                    i += 1
+            logging.info(f"Init {i} Variables Kab Jab done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    ## ========== Constraints
+    def set_Constraint_X_i(self):
+        try:
+            i = 0
+            for container_id, position_dict_dict in self.Xiabr.items():  # i: {a: {(b,r): Xiabr } }
+                name = "ConX_i{}".format(container_id)
+                values = []
+                Expr = []
+                for block, position_dict in position_dict_dict.items():
+                    for position in position_dict:
+                        Expr.append(self.Xiabr[container_id][block][position])
+                        values.append(1)
+                lin_expr = cplex.SparsePair(ind=Expr, val=values)
+                self.Con_X_i[container_id] = self.model.linear_constraints.add(
+                    lin_expr=[lin_expr],
+                    senses=["E"],
+                    rhs=[1.0])
+                i += 1
+            logging.info(f"Set {i} Constraint X_i done")
+        except Exception as ex:
+            logging.warning(ex)
+
+
+    def set_Constraint_X_abr(self):
+        try:
+            i = 0
+            for block, position_container_list in self.instacne.Slot_available_contaienrs.items():
+                self.Con_X_abr[block] = {}
+                for position, container_list in position_container_list.items():
+                    name = "ConX_abr{}".format(position)
+                    Expr = []
+                    values = []
+                    for container_id in container_list:
+                        Expr.append(self.Xiabr[container_id][block][position])
+                        values.append(1)
+                    lin_expr = cplex.SparsePair(ind=Expr, val=values)
+                    self.Con_X_abr[block][position] = self.model.linear_constraints.add(
+                        lin_expr=[lin_expr],
+                        senses=["L"],
+                        rhs=[1])
+                    i += 1
+            logging.info(f"Set {i} Constraint X_abr done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    def set_Constraint_X_Y(self):
+        try:
+            i = 0
+            for vessel, block_connum_dict in self.instacne.Contaienrs_num_in_block.items():
+                self.Con_X_Y[vessel] = {}
+                for block, connum in block_connum_dict.items():
+                    name = "ConX_Y_{}_{}".format(vessel, block)
+                    Expr = []
+                    values = []
+                    Expr.append(self.Yva[vessel][block])
+                    values.append(1)
+                    for container_id in self.instacne.Vessel_container[vessel]:
+                        if block in self.Xiabr[container_id]:
+                            for position in self.Xiabr[container_id][block]:
+                                Expr.append(self.Xiabr[container_id][block][position])
+                                values.append(-1)
+                    lin_expr = cplex.SparsePair(ind=Expr, val=values)
+                    lin_expr.constant = -1 * connum
+                    self.Con_X_Y[vessel][block] = self.model.linear_constraints.add(
+                        lin_expr=[lin_expr],
+                        senses=["E"],
+                        rhs=[0])
+                    i += 1
+            logging.info(f"Set {i} Constraint X_Y done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    def set_Constraint_Y_Z(self):
+        try:
+            i = 0
+            for vessel, block_connum_dict in self.Yva.items():
+                self.Con_Y_Z[vessel] = {}
+                for block, connum in block_connum_dict.items():
+                    self.Con_Y_Z[vessel][block] = {}
+                    name = "ConY_Z_{}_{}".format(vessel, block)
+                    #
+                    Expr1 = []
+                    values1 = [1, 1]
+                    Expr1.append(self.Zva[vessel][block])
+                    Expr1.append(self.Yva[vessel][block])
+                    lin_expr1 = cplex.SparsePair(ind=Expr1, val=values1)
+                    lin_expr1.constant = self.instacne.Contaienrs_meannum_afterslot[vessel][0]
+                    self.Con_Y_Z[vessel][block][1] = self.model.linear_constraints.add(
+                        lin_expr=[lin_expr1],
+                        senses=["G"],
+                        rhs=[0])
+
+                    Expr2 = []
+                    values2 = [1, 1]
+                    Expr2.append(self.Yva[vessel][block])
+                    Expr2.append(self.Zva[vessel][block])
+                    lin_expr2 = cplex.SparsePair(ind=Expr2, val=values2)
+                    lin_expr2.constant = -1 * self.instacne.Contaienrs_meannum_afterslot[vessel][0]
+                    self.Con_Y_Z[vessel][block][2] = self.model.linear_constraints.add(
+                        lin_expr=[lin_expr2],
+                        senses=["G"],
+                        rhs=[0])
+                    i += 1
+            logging.info(f"Set {2 * i} ConstraintY_Z done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    def set_Constraint_X_K(self):
+        try:
+            i = 0
+            for block, block_data in self.instacne.Slot_available_contaienrs_bay.items():
+                self.Con_X_K[block] = {}
+                for bay, bay_data in block_data.items():
+                    name = "ConX_K_{}_{}".format(block, bay)
+                    Expr = []
+                    values = []
+                    Expr.append(self.Kab[block][bay])
+                    values.append(1)
+                    for position, container_id_list in bay_data.items():
+                        for container_id in container_id_list:
+                            Expr.append(self.Xiabr[container_id][block][position])
+                            values.append(-1)
+                    lin_expr = cplex.SparsePair(ind=Expr, val=values)
+                    self.Con_X_K[block][bay] = self.model.linear_constraints.add(
+                        lin_expr=[lin_expr],
+                        senses=["E"],
+                        rhs=[0])
+                    i += 1
+            logging.info(f"Set {i} Constraint X_K done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    def set_Constraint_K_J(self):
+        try:
+            i = 0
+            for block, block_data in self.Jab.items():
+                self.Con_K_J[block] = {}
+                for bay in block_data:
+                    self.Con_K_J[block][bay] = {}
+                    name = "ConK_J_{}_{}".format(block, bay)
+                    #
+                    Expr1 = []
+                    Expr1.append(self.Jab[block][bay])
+                    Expr1.append(self.Kab[block][bay])
+                    values1 = [self.instacne.Baylimit[block][bay], -1]
+                    lin_expr1 = cplex.SparsePair(ind=Expr1, val=values1)
+                    self.Con_K_J[block][bay][1] = self.model.linear_constraints.add(
+                        lin_expr=[lin_expr1],
+                        senses=["G"],
+                        rhs=[0])
+                    #
+                    Expr2 = []
+                    Expr2.append(self.Jab[block][bay])
+                    Expr2.append(self.Kab[block][bay])
+                    values2 = [-1, 1]
+                    lin_expr2 = cplex.SparsePair(ind=Expr2, val=values2)
+                    self.Con_K_J[block][bay][2] = self.model.linear_constraints.add(
+                        lin_expr=[lin_expr2],
+                        senses=["G"],
+                        rhs=[0])
+                    i += 1
+            logging.info(f"Set Constraint {2 * i} K_J done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    def set_Constraint_J_conflict(self):
+        try:
+            i = 0
+            for block, confilct_bays_list in self.instacne.size_confilct.items():
+                if block in self.Jab:
+                    self.Con_J_conflict[block] = {}
+                    for confilct_bays in confilct_bays_list:
+                        name = "J_conflict_{}_{}".format(block, confilct_bays)
+                        Expr = []
+                        values = []
+                        for bay in confilct_bays:
+                            if bay in self.Jab[block]:
+                                Expr.append(self.Jab[block][bay])
+                                values.append(1)
+                        lin_expr = cplex.SparsePair(ind=Expr, val=values)
+                        self.Con_J_conflict[block][tuple(confilct_bays)] = self.model.linear_constraints.add(
+                            lin_expr=[lin_expr],
+                            senses=["L"],
+                            rhs=[1])
+                        i += 1
+            logging.info(f"Set Constraint {i} J_conflict done")
+        except CplexError as exc:
+            logging.warning(exc)
+
+
+    ## ========== Objective
+    def cal_Objective_diff(self):
+        Expr = []
+        values = []
+        for vessel in self.instacne.Vessel_container:
+            for container_id in self.instacne.Vessel_container[vessel]:
+                for block, position_dict in self.Xiabr[container_id].items():
+                    for position in position_dict:
+                        Diabr = self.instacne.Add_diff_container_stack[container_id][block][position]
+                        Expr.append(self.Xiabr[container_id][block][position])
+                        values.append(self.weight["final_weights_diff"] * Diabr)
+            # lin_expr = cplex.SparsePair(ind=Expr, val=values)
+            # lin_expr.constant = self.weight["final_weights_diff"] * self.instacne.Sumdiff[vessel]
+        logging.info(f"Cal Objective_diff done")
+        return Expr, values
+
+    def cal_Objective_Equilibrium(self):
+        Expr = []
+        values = []
+        for vessel in self.instacne.Vessel_container:
+            for block in self.Zva[vessel]:
+                Expr.append(self.Zva[vessel][block])
+                values.append(self.weight[ "final_block_Equilibrium"])
+        # lin_expr = cplex.SparsePair(ind=Expr, val=values)
+        logging.info(f"Cal Objective_Equilibrium done")
+        return Expr, values
+
+    def set_Obiective(self):
+        Expr = []
+        values = []
+        Expr1, values1 = self.cal_Objective_diff()
+        Expr.extend(Expr1)
+        values.extend(values1)
+        Expr2, values2 = self.cal_Objective_Equilibrium()
+        Expr.extend(Expr2)
+        values.extend(values2)
+        self.model.objective.set_linear(zip(Expr, values))
+        self.model.objective.set_sense(self.model.objective.sense.minimize)
+        logging.info(f"Cal Objective done")
+
+    ## ========== Solution
+    def parse_Solution(self):
+        logging.info(f"ObjVal of MIP Model = {self.model.solution.get_objective_value()}")
+
+        Solution = {}
+        for container_id, position_dict_dict in self.Xiabr.items():
+            for block, position_dict in position_dict_dict.items():
+                for position in position_dict:
+                    if self.model.solution.get_values(self.Xiabr[container_id][block][position]):
+                        Solution[container_id] = (block, position[0], position[1], position[2])
+        logging.info(f"parse Solution of Model done")
+        return Solution
+
+        ## ========== Model
+
+    def build_Model(self):
+        logging.info(f"--------------------- Start build MIP Model by cplex---------------------")
+        self.init_Variables_Xiabr()
+        self.init_Variables_Yva_Zva()
+        self.init_Variables_Kab_Jab()
+        #
+        self.set_Constraint_X_i()
+        self.set_Constraint_X_abr()
+        self.set_Constraint_X_Y()
+        self.set_Constraint_Y_Z()
+        self.set_Constraint_X_K()
+        self.set_Constraint_K_J()
+        self.set_Constraint_J_conflict()
+        #
+        self.set_Obiective()
+        #
+        self.model.set_log_stream(None)
+        self.model.set_results_stream(None)
+        self.model.solve()
+        if self.model.solution.get_status_string():
+            Solution = self.parse_Solution()
+        else:
+            logging.warning(f"--------------------- MIP Model INFEASIBLE ---------------------")
+            Solution = None
+        logging.info(f"Solution = {Solution}")
+        return Solution
+
+
 def gen_solution_MIP(input, weight, ratio: float, decay_rate: float, Solver = "gurobi"):
     """
     调用gurobi构建MIP模型, 进行箱位规划
@@ -754,12 +1132,17 @@ def gen_solution_MIP(input, weight, ratio: float, decay_rate: float, Solver = "g
             solver = MIP_solver(instance_buffer, weight)
         elif Solver == "ortools":
             solver = MIP_solver_ortools(instance_buffer, weight)
+        elif Solver == "cplex":
+            solver = MIP_solver_cplex(instance_buffer, weight)
         solution = solver.build_Model()
         return solution
     except Exception as ex:
         logging.warning(f"Failed to build MIP Model: {ex}")
         Ratio = ratio * decay_rate
-        solution = gen_solution_MIP(input, weight, ratio=Ratio, decay_rate=decay_rate, Solver = Solver)
+        if Ratio >=0.02:
+            solution = gen_solution_MIP(input, weight, ratio=Ratio, decay_rate=decay_rate, Solver = Solver)
+        else:
+            solution = None
         return solution
 
 
