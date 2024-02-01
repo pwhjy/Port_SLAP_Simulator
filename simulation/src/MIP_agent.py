@@ -766,7 +766,7 @@ def gen_solution_MIP(input, weight, ratio: float, decay_rate: float, Solver = "g
 if __name__ == "__main__":
     # 测试例程
     from simulation.DataBase.core import *
-    config_path = "config/demo.ini"
+    config_path = "../config/test.ini"
     db = DB(config_path)
     # db.Initall()
     db.reset(reset="dump")
@@ -790,8 +790,11 @@ if __name__ == "__main__":
         yard_features_cache = db.cal_yard_features_cache(vessel = None) # 缓存计算 dict of list
         # ====== 获取buffer
         container_list = db.next_ten_container(num = buffer_size)
+    final_state = db.get_final_state()
+    print(final_state)
     logging.info(f"{time.time() - start}")
-
+    print(f"{time.time() - start}")
+    print(yard_features_cache)
     db.close()
 
 

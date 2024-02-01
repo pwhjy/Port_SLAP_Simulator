@@ -56,6 +56,8 @@ class DB(DB0):
         ## ====== cache
         self.weightclass = 12
         self.Yard_cache = Yard_cache(self.confpath, self.block.keys(), self.weightclass)
+        self.Yard_cache.set_weight_diff_block(self.block)
+        print(self.Yard_cache.weight_diff_block)
         self.candidate_slots = {}
 
     def Yard_distance(self):
@@ -280,7 +282,7 @@ class DB(DB0):
 
                         logging.debug(f"create container {cur + str(t)} in {s[0], s[1], s[2], t - 1}, "
                               f"similar to {cur} in {s[0], s[1], s[2], t} ")
-                        self.Yard_cache .slot_and_update(curcon, (basecon.block, basecon.bay, basecon.stack, basecon.tier-1))  ### 同步更新特征缓存
+                        self.Yard_cache.slot_and_update(curcon, (basecon.block, basecon.bay, basecon.stack, basecon.tier-1))  ### 同步更新特征缓存
                 # 更新Yard_stack
                 self.update_rows(Yard_stack,
                                  sa.and_(Yard_stack.block == s[0], Yard_stack.bay == s[1],Yard_stack.stack == s[2]),
@@ -300,11 +302,15 @@ class DB(DB0):
         new_order = list(range(con_num))
         all_cons = self.session.query(Containers_outyard.ctn_no).order_by(Containers_outyard.inyard_time).all()
         if self.shuffle:
+            random.seed(10)
             random.shuffle(new_order)
             logging.debug(f"new_order of Containers_outyard = {new_order}")
         for order, ctn_no in zip(new_order, all_cons):
             self.update_rows(Containers_outyard, Containers_outyard.ctn_no == ctn_no[0], {"order": order})
         logging.info(f"Set order for all Containers_outyard done, shuffle = {self.shuffle}")
+
+    def get_final_state(self):
+        return self.Yard_cache.get_block_state(list(self.block.values())[0], list(self.block.keys())[0])
 
     def set_berth(self):
         """
@@ -547,6 +553,7 @@ class DB(DB0):
         # 读取初始Yard_cache
         print("self.Yard_cache_path is {}".format(self.Yard_cache_path))
         self.Yard_cache = pickle.load(open(self.Yard_cache_path, "rb"))
+        self.Yard_cache.set_weight_diff_block(self.block)
         self.Yard_cache.Yard_block_distance = pd.read_csv(self.b_dispath, index_col=0) #
         logging.info(f"Load Yard_cache.pkl done")
 
