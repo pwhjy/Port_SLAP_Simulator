@@ -83,9 +83,9 @@ class PortSim(object):
             return next_state, reward_higher, reward_lower, done, rewards
         cur_vessel = self.cur_container.vessel
         while cur_vessel != self.target_vessel and done != 1:
-            random_action = self._step_container_random(cur_container)
+            random_action = self._step_container_random(self.cur_container)
             action_step = {
-                "cur_container": cur_container,
+                "cur_container": self.cur_container,
                 "candidate_slot_action": random_action
             }
             next_state, _, _, done, _ = self._step(action_step, random_step=True)
@@ -229,12 +229,6 @@ class PortSim(object):
         fea_concentration = sum(v[3] for v in yard_features.values())
         fea_Density = sum(v[4] for v in yard_features.values())
 
-        # reward_lower = -1 * self.final_weights_diff * fea_weights + -1 * (
-        #             self.final_concentration) * fea_concentration
-        # reward_higher = -1 * self.final_block_Equilibrium * fea_blocks + \
-        #                 self.final_berth_block * Berth_block + \
-        #                 -1 * self.final_block_density * fea_Density + \
-        #                 self.final_lower_to_higher * reward_lower
         reward_lower = -1 * self.final_weights_diff * fea_weights
         reward_higher = -1 * self.final_block_Equilibrium * fea_blocks + \
                         self.final_berth_block * Berth_block
