@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package fabupilot.simulation_v2.simulation_port;
+
+import "model.proto";
+
+// The Viewer is the client and pulls requests from this Python service.
+// These deliberately reversed request/response directions are retained for
+// wire compatibility with the distributed Unity binary.
+service PortService {
+  rpc LoadMap(LoadMapResponse) returns (LoadMapRequest);
+  rpc LoadPort(LoadPortResponse) returns (LoadPortRequest);
+  rpc LoadContainers(LoadContainersResponse) returns (LoadContainersRequest);
+  rpc ScheduleContainers(ScheduleContainersResponse)
+      returns (ScheduleContainersRequest);
+  rpc CheckRender(ScheduleContainersResponse)
+      returns (ScheduleContainersResponse);
+  rpc FinishRender(ScheduleContainersResponse)
+      returns (ScheduleContainersResponse);
+}

@@ -1,0 +1,49 @@
+{
+  "format_version": 1,
+  "sample_kind": "reference-layout-demo",
+  "deterministic_seed": 20260720,
+  "synthetic_container_metadata": true,
+  "preserved_reference_layout": true,
+  "source_data_included": false,
+  "preserved_fields": [
+    "port_info",
+    "container.size",
+    "container.yard_pos",
+    "container.ship_pos",
+    "schedule.frame_id"
+  ],
+  "generated_fields": [
+    "container.name",
+    "container.attrs.category",
+    "container.attrs.service",
+    "container.attrs.vessel",
+    "container.attrs.des_port",
+    "container.attrs.weight",
+    "container.attrs.status",
+    "container.attrs.allocation",
+    "container.attrs.flag"
+  ],
+  "yards": 84,
+  "initial_containers": 19331,
+  "schedule_steps": 299,
+  "scheduled_loads": 252,
+  "scheduled_unloads": 0,
+  "files": {
+    "load_port_req.pb": {
+      "bytes": 2775,
+      "sha256": "8df382053da63bb3b5dade869da543340143ccb2f235b7cdd07b6c84f184c7ab"
+    },
+    "load_containers_req.pb": {
+      "bytes": 1778452,
+      "sha256": "bf4c9dd4fec06e39db2e9672fb5aaddd683f37f7efbb0c852938ab32207cadd4"
+    },
+    "schedule_containers_req.pb": {
+      "bytes": 24548,
+      "sha256": "0085e603968ac1dfe5e5d435d8dda9423b709cc0f56224e8fb58184b5ba0cb77"
+    },
+    "preview.json": {
+      "bytes": 6218,
+      "sha256": "4bb10422270cbf5c7f5a65d1ee147a4b39b29eeb11dbdfad111f98138f9792fe"
+    }
+  }
+}

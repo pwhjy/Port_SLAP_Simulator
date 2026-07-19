@@ -1,0 +1,274 @@
+{
+  "format_version": 1,
+  "description": "Small readable preview of the deterministic random container metadata in the full reference-layout protobuf sample.",
+  "total_initial_containers": 19331,
+  "total_schedule_steps": 299,
+  "initial_containers": [
+    {
+      "name": "SYN-C-000001",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC-12",
+        "vessel": "SYN-VSL-045",
+        "destination_port": "SYN-PORT-20",
+        "weight": 10,
+        "status": 1,
+        "allocation": "SYN-ALLOC-06",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "88",
+        "row": 86,
+        "column": 3,
+        "tier": 1
+      }
+    },
+    {
+      "name": "SYN-C-000002",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC-16",
+        "vessel": "SYN-VSL-027",
+        "destination_port": "SYN-PORT-07",
+        "weight": 5,
+        "status": 0,
+        "allocation": "SYN-ALLOC-06",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "XA",
+        "row": 94,
+        "column": 5,
+        "tier": 2
+      }
+    },
+    {
+      "name": "SYN-C-000003",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 2,
+        "service": "SYN-SVC-01",
+        "vessel": "SYN-VSL-048",
+        "destination_port": "SYN-PORT-17",
+        "weight": 5,
+        "status": 1,
+        "allocation": "SYN-ALLOC-07",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "XA",
+        "row": 94,
+        "column": 5,
+        "tier": 1
+      }
+    },
+    {
+      "name": "SYN-C-000004",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 2,
+        "service": "SYN-SVC-01",
+        "vessel": "SYN-VSL-007",
+        "destination_port": "SYN-PORT-08",
+        "weight": 14,
+        "status": 1,
+        "allocation": "SYN-ALLOC-04",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "XA",
+        "row": 82,
+        "column": 5,
+        "tier": 1
+      }
+    },
+    {
+      "name": "SYN-C-000005",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 3,
+        "service": "SYN-SVC-16",
+        "vessel": "SYN-VSL-003",
+        "destination_port": "SYN-PORT-24",
+        "weight": 9,
+        "status": 1,
+        "allocation": "SYN-ALLOC-02",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "77",
+        "row": 24,
+        "column": 4,
+        "tier": 1
+      }
+    },
+    {
+      "name": "SYN-C-000006",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC-06",
+        "vessel": "SYN-VSL-020",
+        "destination_port": "SYN-PORT-07",
+        "weight": 12,
+        "status": 0,
+        "allocation": "SYN-ALLOC-08",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "68",
+        "row": 54,
+        "column": 2,
+        "tier": 1
+      }
+    },
+    {
+      "name": "SYN-C-000007",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 2,
+        "service": "SYN-SVC-08",
+        "vessel": "SYN-VSL-026",
+        "destination_port": "SYN-PORT-20",
+        "weight": 12,
+        "status": 0,
+        "allocation": "SYN-ALLOC-04",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "68",
+        "row": 54,
+        "column": 2,
+        "tier": 2
+      }
+    },
+    {
+      "name": "SYN-C-000008",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 2,
+        "service": "SYN-SVC-06",
+        "vessel": "SYN-VSL-018",
+        "destination_port": "SYN-PORT-25",
+        "weight": 12,
+        "status": 0,
+        "allocation": "SYN-ALLOC-02",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "XC",
+        "row": 74,
+        "column": 3,
+        "tier": 1
+      }
+    },
+    {
+      "name": "SYN-C-000009",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 2,
+        "service": "SYN-SVC-01",
+        "vessel": "SYN-VSL-062",
+        "destination_port": "SYN-PORT-27",
+        "weight": 11,
+        "status": 1,
+        "allocation": "SYN-ALLOC-05",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "XC",
+        "row": 74,
+        "column": 3,
+        "tier": 2
+      }
+    },
+    {
+      "name": "SYN-C-000010",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC-13",
+        "vessel": "SYN-VSL-015",
+        "destination_port": "SYN-PORT-20",
+        "weight": 2,
+        "status": 0,
+        "allocation": "SYN-ALLOC-07",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "XA",
+        "row": 22,
+        "column": 5,
+        "tier": 2
+      }
+    },
+    {
+      "name": "SYN-C-000011",
+      "size": "SIZE_40_FEET",
+      "attributes": {
+        "category": 2,
+        "service": "SYN-SVC-24",
+        "vessel": "SYN-VSL-040",
+        "destination_port": "SYN-PORT-31",
+        "weight": 15,
+        "status": 1,
+        "allocation": "SYN-ALLOC-08",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "XA",
+        "row": 22,
+        "column": 5,
+        "tier": 1
+      }
+    },
+    {
+      "name": "SYN-C-000012",
+      "size": "SIZE_20_FEET",
+      "attributes": {
+        "category": 3,
+        "service": "SYN-SVC-21",
+        "vessel": "SYN-VSL-028",
+        "destination_port": "SYN-PORT-15",
+        "weight": 19,
+        "status": 0,
+        "allocation": "SYN-ALLOC-05",
+        "flag": 0
+      },
+      "yard_position": {
+        "block": "77",
+        "row": 33,
+        "column": 2,
+        "tier": 2
+      }
+    }
+  ],
+  "final_schedule_step": {
+    "frame_id": 299,
+    "load": [
+      {
+        "name": "finalcon",
+        "size": "SIZE_45_FEET",
+        "attributes": {
+          "category": 2,
+          "service": "SYN-SVC-23",
+          "vessel": "SYN-VSL-023",
+          "destination_port": "SYN-PORT-02",
+          "weight": 11,
+          "status": 1,
+          "allocation": "SYN-ALLOC-05",
+          "flag": 0
+        },
+        "yard_position": {
+          "block": "77",
+          "row": 6,
+          "column": 5,
+          "tier": 5
+        }
+      }
+    ],
+    "unload": []
+  }
+}

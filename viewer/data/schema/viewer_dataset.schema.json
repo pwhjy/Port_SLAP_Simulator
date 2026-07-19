@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pwhjy/Port_SLAP_Simulator/viewer/data/schema/viewer_dataset.schema.json",
+  "title": "Port SLAP Viewer dataset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "port", "initial_containers", "schedule"],
+  "properties": {
+    "format_version": {"const": 1},
+    "description": {"type": "string"},
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["yards"],
+      "properties": {
+        "yards": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/yard"}
+        }
+      }
+    },
+    "initial_containers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/container"}
+    },
+    "schedule": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/scheduleStep"}
+    }
+  },
+  "$defs": {
+    "yard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "calibration_row", "position", "direction", "start_row", "end_row"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "calibration_row": {
+          "type": "integer",
+          "description": "The row located exactly at the yard calibration position."
+        },
+        "position": {
+          "type": "object",
+          "description": "Synthetic Unity ground-plane calibration: x maps to world x and y maps to world z.",
+          "additionalProperties": false,
+          "required": ["x", "y"],
+          "properties": {
+            "x": {"type": "number"},
+            "y": {"type": "number"}
+          }
+        },
+        "angle_radians": {
+          "type": "number",
+          "default": 0,
+          "description": "Yard-axis heading in radians; our Viewer uses Unity yaw = 90 degrees - angle."
+        },
+        "direction": {
+          "enum": ["left", "right"],
+          "description": "Side of the yard axis on which columns 1-6 are placed."
+        },
+        "start_row": {"type": "integer"},
+        "end_row": {"type": "integer"}
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block", "row", "column", "tier"],
+      "properties": {
+        "block": {"type": "string", "minLength": 1},
+        "row": {"type": "integer"},
+        "column": {"type": "integer", "minimum": 1, "maximum": 6},
+        "tier": {"type": "integer", "minimum": 1, "maximum": 5}
+      }
+    },
+    "attributes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "category": {"type": "integer"},
+        "service": {"type": "string"},
+        "vessel": {"type": "string"},
+        "destination_port": {"type": "string"},
+        "weight": {"type": "integer"},
+        "status": {"type": "integer"},
+        "allocation": {"type": "string"},
+        "flag": {"type": "integer"}
+      }
+    },
+    "container": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "size", "position"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 20},
+        "size": {"enum": [20, 40, 45]},
+        "position": {"$ref": "#/$defs/position"},
+        "attributes": {"$ref": "#/$defs/attributes"}
+      }
+    },
+    "scheduleStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame_id", "load", "unload"],
+      "properties": {
+        "frame_id": {"type": "integer", "minimum": 1},
+        "load": {"type": "array", "items": {"$ref": "#/$defs/container"}},
+        "unload": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use Port SLAP Simulator in research, please cite this software."
+title: "Port SLAP Simulator"
+type: software
+version: 0.1.0
+authors:
+  - alias: panweihang
+repository-code: "https://github.com/pwhjy/Port_SLAP_Simulator"
+url: "https://github.com/pwhjy/Port_SLAP_Simulator"
+license: "PolyForm-Noncommercial-1.0.0"

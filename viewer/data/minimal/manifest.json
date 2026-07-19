@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "synthetic": true,
+  "source": "viewer_dataset.json",
+  "yards": 2,
+  "initial_containers": 8,
+  "schedule_steps": 13,
+  "scheduled_loads": 13,
+  "scheduled_unloads": 0,
+  "files": {
+    "load_port_req.pb": {
+      "bytes": 68,
+      "sha256": "ee60bac5a2059ea8bf185888f450c835b289d816e1efc44a770bbf5ee90f2cbb"
+    },
+    "load_containers_req.pb": {
+      "bytes": 600,
+      "sha256": "9d133feb4554aad074cc169690ca245a1b70b11d845758e0331c4864ea2252b2"
+    },
+    "schedule_containers_req.pb": {
+      "bytes": 1025,
+      "sha256": "6a8df34564e7c77593873c48ef04deb31ef420e4078e091b34f12f3d2d2af8a4"
+    }
+  }
+}

@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "port-slap-simulator"
+version = "0.1.0"
+description = "A port-yard container storage location assignment and scheduling simulator."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "PolyForm-Noncommercial-1.0.0" }
+authors = [{ name = "pwhjy", email = "panweihang@zju.edu.cn" }]
+maintainers = [{ name = "pwhjy", email = "panweihang@zju.edu.cn" }]
+keywords = ["port", "container", "yard", "simulation", "scheduling", "SLAP"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Education",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+  "cryptography>=42,<46",
+  "matplotlib>=3.7,<4",
+  "networkx>=3.1,<4",
+  "numpy>=1.24,<3",
+  "pandas>=1.5,<3",
+  "PyMySQL>=1.1,<2",
+  "python-dotenv>=1,<2",
+  "SQLAlchemy>=1.4,<2",
+]
+
+[project.optional-dependencies]
+viewer = [
+  "grpcio>=1.60,<2",
+  "protobuf>=4.25,<5",
+]
+ortools = ["ortools>=9.9,<9.10"]
+dev = [
+  "grpcio-tools>=1.60,<1.61",
+  "pytest>=7.4,<9",
+]
+
+[project.scripts]
+port-slap-viewer-export = "port_slap.visualization.offline_export:main"
+port-slap-viewer-server = "port_slap.visualization.grpc_server:main"
+
+[project.urls]
+Homepage = "https://github.com/pwhjy/Port_SLAP_Simulator"
+Repository = "https://github.com/pwhjy/Port_SLAP_Simulator.git"
+Issues = "https://github.com/pwhjy/Port_SLAP_Simulator/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+markers = [
+  "integration: requires the local MySQL service",
+  "ortools: requires the optional OR-Tools solver",
+]

@@ -1,0 +1,534 @@
+{
+  "format_version": 1,
+  "description": "Deterministic synthetic episode; not derived by anonymizing operational records.",
+  "port": {
+    "yards": [
+      {
+        "name": "S1",
+        "calibration_row": 12,
+        "position": {
+          "x": 19.0,
+          "y": -20.5
+        },
+        "angle_radians": 0.76,
+        "direction": "left",
+        "start_row": 1,
+        "end_row": 24
+      },
+      {
+        "name": "S2",
+        "calibration_row": 12,
+        "position": {
+          "x": 44.5,
+          "y": -47.0
+        },
+        "angle_radians": 0.76,
+        "direction": "right",
+        "start_row": 1,
+        "end_row": 24
+      }
+    ]
+  },
+  "initial_containers": [
+    {
+      "name": "SYN-I-0001",
+      "size": 20,
+      "position": {
+        "block": "S1",
+        "row": 1,
+        "column": 1,
+        "tier": 1
+      },
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC",
+        "vessel": "SYNV01",
+        "destination_port": "SYN-P02",
+        "weight": 2,
+        "status": 1,
+        "allocation": "synthetic",
+        "flag": 0
+      }
+    },
+    {
+      "name": "SYN-I-0002",
+      "size": 20,
+      "position": {
+        "block": "S1",
+        "row": 1,
+        "column": 1,
+        "tier": 2
+      },
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC",
+        "vessel": "SYNV01",
+        "destination_port": "SYN-P02",
+        "weight": 3,
+        "status": 1,
+        "allocation": "synthetic",
+        "flag": 0
+      }
+    },
+    {
+      "name": "SYN-I-0003",
+      "size": 40,
+      "position": {
+        "block": "S1",
+        "row": 4,
+        "column": 1,
+        "tier": 1
+      },
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC",
+        "vessel": "SYNV01",
+        "destination_port": "SYN-P02",
+        "weight": 4,
+        "status": 1,
+        "allocation": "synthetic",
+        "flag": 0
+      }
+    },
+    {
+      "name": "SYN-I-0004",
+      "size": 40,
+      "position": {
+        "block": "S1",
+        "row": 4,
+        "column": 2,
+        "tier": 1
+      },
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC",
+        "vessel": "SYNV01",
+        "destination_port": "SYN-P02",
+        "weight": 5,
+        "status": 1,
+        "allocation": "synthetic",
+        "flag": 0
+      }
+    },
+    {
+      "name": "SYN-I-0005",
+      "size": 20,
+      "position": {
+        "block": "S2",
+        "row": 1,
+        "column": 1,
+        "tier": 1
+      },
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC",
+        "vessel": "SYNV01",
+        "destination_port": "SYN-P02",
+        "weight": 6,
+        "status": 1,
+        "allocation": "synthetic",
+        "flag": 0
+      }
+    },
+    {
+      "name": "SYN-I-0006",
+      "size": 20,
+      "position": {
+        "block": "S2",
+        "row": 3,
+        "column": 2,
+        "tier": 1
+      },
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC",
+        "vessel": "SYNV01",
+        "destination_port": "SYN-P02",
+        "weight": 7,
+        "status": 1,
+        "allocation": "synthetic",
+        "flag": 0
+      }
+    },
+    {
+      "name": "SYN-I-0007",
+      "size": 40,
+      "position": {
+        "block": "S2",
+        "row": 6,
+        "column": 1,
+        "tier": 1
+      },
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC",
+        "vessel": "SYNV01",
+        "destination_port": "SYN-P02",
+        "weight": 8,
+        "status": 1,
+        "allocation": "synthetic",
+        "flag": 0
+      }
+    },
+    {
+      "name": "SYN-I-0008",
+      "size": 40,
+      "position": {
+        "block": "S2",
+        "row": 6,
+        "column": 3,
+        "tier": 1
+      },
+      "attributes": {
+        "category": 1,
+        "service": "SYN-SVC",
+        "vessel": "SYNV01",
+        "destination_port": "SYN-P02",
+        "weight": 9,
+        "status": 1,
+        "allocation": "synthetic",
+        "flag": 0
+      }
+    }
+  ],
+  "schedule": [
+    {
+      "frame_id": 1,
+      "load": [
+        {
+          "name": "SYN-O-0001",
+          "size": 40,
+          "position": {
+            "block": "S1",
+            "row": 2,
+            "column": 1,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 2,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 2,
+      "load": [
+        {
+          "name": "SYN-O-0002",
+          "size": 40,
+          "position": {
+            "block": "S1",
+            "row": 2,
+            "column": 2,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 3,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 3,
+      "load": [
+        {
+          "name": "SYN-O-0003",
+          "size": 20,
+          "position": {
+            "block": "S1",
+            "row": 2,
+            "column": 3,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 4,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 4,
+      "load": [
+        {
+          "name": "SYN-O-0004",
+          "size": 40,
+          "position": {
+            "block": "S1",
+            "row": 3,
+            "column": 1,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 5,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 5,
+      "load": [
+        {
+          "name": "SYN-O-0005",
+          "size": 40,
+          "position": {
+            "block": "S1",
+            "row": 3,
+            "column": 2,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 6,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 6,
+      "load": [
+        {
+          "name": "SYN-O-0006",
+          "size": 20,
+          "position": {
+            "block": "S1",
+            "row": 3,
+            "column": 3,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 7,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 7,
+      "load": [
+        {
+          "name": "SYN-O-0007",
+          "size": 40,
+          "position": {
+            "block": "S2",
+            "row": 2,
+            "column": 1,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 8,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 8,
+      "load": [
+        {
+          "name": "SYN-O-0008",
+          "size": 40,
+          "position": {
+            "block": "S2",
+            "row": 2,
+            "column": 2,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 9,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 9,
+      "load": [
+        {
+          "name": "SYN-O-0009",
+          "size": 20,
+          "position": {
+            "block": "S2",
+            "row": 2,
+            "column": 3,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 1,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 10,
+      "load": [
+        {
+          "name": "SYN-O-0010",
+          "size": 40,
+          "position": {
+            "block": "S2",
+            "row": 4,
+            "column": 1,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 2,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 11,
+      "load": [
+        {
+          "name": "SYN-O-0011",
+          "size": 40,
+          "position": {
+            "block": "S2",
+            "row": 4,
+            "column": 2,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 3,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 12,
+      "load": [
+        {
+          "name": "SYN-O-0012",
+          "size": 20,
+          "position": {
+            "block": "S2",
+            "row": 4,
+            "column": 3,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 4,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    },
+    {
+      "frame_id": 13,
+      "load": [
+        {
+          "name": "finalcon",
+          "size": 20,
+          "position": {
+            "block": "S1",
+            "row": 5,
+            "column": 1,
+            "tier": 1
+          },
+          "attributes": {
+            "category": 1,
+            "service": "SYN-SVC",
+            "vessel": "SYNV01",
+            "destination_port": "SYN-P02",
+            "weight": 1,
+            "status": 1,
+            "allocation": "synthetic",
+            "flag": 0
+          }
+        }
+      ],
+      "unload": []
+    }
+  ]
+}

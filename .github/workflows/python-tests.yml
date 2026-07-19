@@ -1,0 +1,73 @@
+name: Python tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -c constraints.txt -e '.[viewer,dev]'
+      - run: python scripts/generate_synthetic_data.py
+      - run: port-slap-viewer-export --output viewer/data/minimal
+      - run: git diff --exit-code -- examples/synthetic_data viewer/data/minimal
+      - run: pytest -m "not integration"
+
+  baseline-ortools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -c constraints.txt -e '.[ortools,dev]'
+      - run: python examples/sa_baseline.py
+      - run: python examples/mip_baseline.py
+      - run: pytest -m ortools tests/test_baseline_algorithms.py
+
+  mysql-integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: port_slap_demo
+          MYSQL_USER: port_slap
+          MYSQL_PASSWORD: port_slap_demo
+          MYSQL_ROOT_PASSWORD: port_slap_root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uport_slap -pport_slap_demo --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      PORT_SLAP_RUN_INTEGRATION: "1"
+      PORT_SLAP_DB_HOST: 127.0.0.1
+      PORT_SLAP_DB_PORT: "3306"
+      PORT_SLAP_DB_USERNAME: port_slap
+      PORT_SLAP_DB_PASSWORD: port_slap_demo
+      PORT_SLAP_DB_NAME: port_slap_demo
+      PORT_SLAP_DB_CONTAINER: None
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -c constraints.txt -e '.[viewer,dev]'
+      - run: pytest -m integration

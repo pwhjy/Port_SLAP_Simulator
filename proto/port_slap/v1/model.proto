@@ -1,0 +1,136 @@
+syntax = "proto3";
+
+package fabupilot.simulation_v2.simulation_port;
+
+message RequestHeader {}
+
+message ResponseHeader {
+  optional bool success = 1;
+}
+
+message LoadMapRequest {
+  optional RequestHeader header = 1;
+  optional MapInfo map_info = 2;
+}
+
+message LoadMapResponse {
+  optional ResponseHeader header = 1;
+}
+
+message LoadPortRequest {
+  optional RequestHeader header = 1;
+  optional PortInfo port_info = 2;
+}
+
+message LoadPortResponse {
+  optional ResponseHeader header = 1;
+}
+
+message LoadContainersRequest {
+  optional RequestHeader header = 1;
+  repeated ContainerInfo containers_info = 2;
+}
+
+message LoadContainersResponse {
+  optional ResponseHeader header = 1;
+}
+
+message ScheduleContainersRequest {
+  optional RequestHeader header = 1;
+  repeated ScheduleInfo schedule_steps = 2;
+}
+
+message ScheduleContainersResponse {
+  optional ResponseHeader header = 1;
+}
+
+message Vector2 {
+  optional float x = 1;
+  optional float y = 2;
+}
+
+message Vector3 {
+  optional float x = 1;
+  optional float y = 2;
+  optional float z = 3;
+}
+
+message Polygon {
+  optional string id = 1;
+  repeated Vector2 points = 2;
+}
+
+message Line {
+  optional string id = 1;
+  repeated Vector2 points = 2;
+}
+
+message MapInfo {
+  optional Vector2 offset = 1;
+  repeated Polygon roads = 2;
+  repeated Polygon junctions = 3;
+  repeated Line lanemarks = 4;
+}
+
+message PortInfo {
+  repeated YardInfo yards = 1;
+}
+
+message YardInfo {
+  enum YardDirection {
+    DIR_LEFT = 0;
+    DIR_RIGHT = 1;
+  }
+
+  message CalibInfo {
+    optional int32 row = 1;
+    optional Vector2 position = 2;
+    optional float angle = 3;
+    optional Vector2 offset = 4;
+  }
+
+  optional string name = 1;
+  optional CalibInfo calib = 2;
+  optional YardDirection direction = 3;
+  optional int32 start_row = 4;
+  optional int32 end_row = 5;
+}
+
+message ContainerInfo {
+  enum ContainerSize {
+    SIZE_UNKNOWN = 0;
+    SIZE_20_FEET = 1;
+    SIZE_40_FEET = 2;
+    SIZE_45_FEET = 3;
+  }
+
+  message ContainerPosition {
+    optional string block = 1;
+    optional int32 row = 2;
+    optional int32 column = 3;
+    optional int32 tier = 4;
+  }
+
+  message ContainerAttributes {
+    optional int32 category = 1;
+    optional string service = 2;
+    optional string vessel = 3;
+    optional string des_port = 4;
+    optional int32 weight = 5;
+    optional int32 status = 6;
+    optional string allocation = 7;
+    optional int32 flag = 8;
+  }
+
+  optional string name = 1;
+  optional ContainerSize size = 2;
+  optional ContainerPosition yard_pos = 3;
+  optional ContainerPosition ship_pos = 4;
+  optional ContainerAttributes attrs = 5;
+}
+
+message ScheduleInfo {
+  optional int32 frame_id = 1;
+  repeated ContainerInfo load_containers = 2;
+  repeated ContainerInfo unload_containers = 3;
+}

@@ -1,0 +1,57 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ${PORT_SLAP_DB_CONTAINER:-port_slap_mysql}
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${PORT_SLAP_DB_NAME:-port_slap_demo}
+      MYSQL_USER: ${PORT_SLAP_DB_USERNAME:-port_slap}
+      MYSQL_PASSWORD: ${PORT_SLAP_DB_PASSWORD:-port_slap_demo}
+      MYSQL_ROOT_PASSWORD: ${PORT_SLAP_DB_ROOT_PASSWORD:-port_slap_root}
+    ports:
+      - "127.0.0.1:${PORT_SLAP_DB_PORT:-3306}:3306"
+    volumes:
+      - port-slap-mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  simulator-demo:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      PORT_SLAP_DB_HOST: mysql
+      PORT_SLAP_DB_PORT: 3306
+      PORT_SLAP_DB_USERNAME: ${PORT_SLAP_DB_USERNAME:-port_slap}
+      PORT_SLAP_DB_PASSWORD: ${PORT_SLAP_DB_PASSWORD:-port_slap_demo}
+      PORT_SLAP_DB_NAME: ${PORT_SLAP_DB_NAME:-port_slap_demo}
+      PORT_SLAP_DB_CONTAINER: None
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["python", "examples/random_policy.py"]
+
+  viewer-server:
+    profiles: ["viewer"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "127.0.0.1:${PORT_SLAP_VIEWER_PORT:-9007}:9007"
+    command:
+      - port-slap-viewer-server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "9007"
+      - --data-dir
+      - viewer/data/sample
+
+volumes:
+  port-slap-mysql-data:

@@ -1,0 +1,41 @@
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+*.local.ini
+
+# Private, generated, and operational data
+.runtime/
+private/
+raw/
+logs/
+*.sql
+*.pkl
+*.pb.bytes
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+
+# IDE and OS files
+.idea/
+.vscode/
+.vs/
+.DS_Store
+Thumbs.db
+
+# Build artifacts and Unity source/builds
+build/
+dist/
+unity/
+UnityProject/
+Library/
+Temp/
+Obj/
+*.exe
+*.dll

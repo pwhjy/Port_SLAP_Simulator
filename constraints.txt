@@ -1,0 +1,14 @@
+# Known-good direct dependency set for the tested Python 3.10/3.11 workflow.
+cryptography==45.0.7
+grpcio==1.60.2
+grpcio-tools==1.60.2
+matplotlib==3.8.4
+networkx==3.4.2
+numpy==1.26.4
+ortools==9.9.3963
+pandas==2.2.3
+protobuf==4.25.9
+PyMySQL==1.1.1
+pytest==8.3.5
+python-dotenv==1.1.1
+SQLAlchemy==1.4.54
